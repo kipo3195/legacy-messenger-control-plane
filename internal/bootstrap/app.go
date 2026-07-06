@@ -3,15 +3,16 @@ package bootstrap
 import (
 	"context"
 	"legacy-messenger-control-plane/configs"
-	"legacy-messenger-control-plane/internal/config"
+
+	"github.com/gin-gonic/gin"
 )
 
 type App struct {
-	Config   *config.Config
+	Config   *configs.Config
 	Clients  *Clients
 	UseCases *UseCases
 	Handlers *Handlers
-	Router   *Router
+	Router   *gin.Engine
 }
 
 func NewApp(ctx context.Context) (*App, error) {

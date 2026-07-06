@@ -3,9 +3,14 @@ package configs
 import "os"
 
 type Config struct {
+	Server   *ServerConfig         `mapstructure:"server"`
 	AWS      *AWSConfig            `mapstructure:"aws"`
 	ECS      *ECSConfig            `mapstructure:"ecs"`
 	Services map[string]ServiceDef `mapstructure:"services"`
+}
+
+type ServerConfig struct {
+	Port string
 }
 
 type AWSConfig struct {
@@ -28,11 +33,20 @@ type ServiceDef struct {
 
 func Load() (*Config, error) {
 
+	server := initServer()
 	aws := initAws()
 
 	return &Config{
-		AWS: aws,
+		Server: server,
+		AWS:    aws,
 	}, nil
+}
+
+func initServer() *ServerConfig {
+	port := os.Getenv("PORT")
+	return &ServerConfig{
+		Port: port,
+	}
 }
 
 func initAws() *AWSConfig {

@@ -1,13 +1,29 @@
 package bootstrap
 
-import "github.com/gin-gonic/gin"
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
 
 func NewRouter(handlers *Handlers) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+		})
+	})
 
 	v1 := r.Group("/api/v1")
 	{
-		v1.GET("/services/:serviceName/status", handlers.Service.GetStatus)
+		services := v1.Group("/services")
+		{
+			services.GET("/:serviceName/status", handlers.Service.GetServiceStatus)
+		}
 	}
 
 	return r
