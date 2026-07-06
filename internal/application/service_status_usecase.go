@@ -3,17 +3,18 @@ package application
 import (
 	"context"
 	"legacy-messenger-control-plane/internal/domain"
+	"legacy-messenger-control-plane/internal/ports"
 )
 
 type serviceStatusUsecase struct {
-	ecsPort ECSPort
+	ecsPort ports.ECSPort
 }
 
 type ServiceStatusUsecase interface {
 	GetServiceStatus(clusterName string, ecsServiceName string) (*domain.ServiceStatus, error)
 }
 
-func NewServiceStatusUsecase(ecsPort ECSPort) ServiceStatusUsecase {
+func NewServiceStatusUsecase(ecsPort ports.ECSPort) ServiceStatusUsecase {
 	return &serviceStatusUsecase{
 		ecsPort: ecsPort,
 	}

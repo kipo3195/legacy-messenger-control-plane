@@ -2,8 +2,9 @@ package bootstrap
 
 import (
 	"context"
-	"control/legacy-messenger-control-plane/internal/ports"
-	"legacy-messenger-control-plane/internal/config"
+	"legacy-messenger-control-plane/configs"
+	"legacy-messenger-control-plane/internal/adapters/aws"
+	"legacy-messenger-control-plane/internal/ports"
 )
 
 type Clients struct {
@@ -12,7 +13,7 @@ type Clients struct {
 	// ELB        ports.TargetHealthPort
 }
 
-func NewClients(ctx context.Context, cfg *config.Config) (*Clients, error) {
+func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 	ecsClient, err := aws.NewECSClient(ctx, cfg.AWS.Region)
 	if err != nil {
 		return nil, err

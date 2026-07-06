@@ -1,12 +1,14 @@
 package http
 
 import (
+	"legacy-messenger-control-plane/internal/application"
 	"net/http"
-	"legacy-messenger-control-plane/internal/ports"
+
+	"github.com/gin-gonic/gin"
 )
 
-type ServiceHandler struct { 
-	statusUseCase ports.ServiceStatusUseCase
+type ServiceHandler struct {
+	statusUseCase application.ServiceStatusUsecase
 }
 
 func (h *ServiceHandler) GetServiceStatus(c *gin.Context) {

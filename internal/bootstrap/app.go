@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/config"
 )
 
@@ -14,12 +15,12 @@ type App struct {
 }
 
 func NewApp(ctx context.Context) (*App, error) {
-	cfg, err := config.Load()
+	cfg, err := configs.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	registry, err := config.NewServiceRegistry(cfg)
+	serviceRegistry, err := configs.NewServiceRegistry(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +30,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 
-	useCases := NewUseCases(clients, registry)
+	useCases := NewUseCases(clients, serviceRegistry)
 	handlers := NewHandlers(useCases)
 	router := NewRouter(handlers)
 

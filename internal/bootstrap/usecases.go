@@ -1,12 +1,12 @@
 package bootstrap
 
 import (
+	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/application"
-	"legacy-messenger-control-plane/internal/config"
 )
 
 type UseCases struct {
-	ServiceStatus *application.ServiceStatusUseCase
+	ServiceStatus *application.ServiceStatusUsecase
 	// ServiceList        *application.ServiceListUseCase
 	// ScaleService       *application.ScaleServiceUseCase
 	// RedeployService    *application.RedeployServiceUseCase
@@ -16,10 +16,10 @@ type UseCases struct {
 
 func NewUseCases(
 	clients *Clients,
-	registry *config.ServiceRegistry,
+	registry *configs.ServiceRegistry,
 ) *UseCases {
 	return &UseCases{
-		ServiceStatus: application.NewServiceStatusUseCase(
+		ServiceStatus: application.NewServiceStatusUsecase(
 			clients.ECS,
 			registry,
 		),
