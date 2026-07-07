@@ -1,10 +1,19 @@
 package configs
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+
+	"github.com/goccy/go-yaml"
+)
 
 type ServiceRegistry struct {
 	clusterName string
 	services    map[string]ServiceDef
+}
+
+type serviceRegistryFile struct {
+	Services map[string]ServiceDef `yaml:"services"`
 }
 
 func NewServiceRegistry(cfg *Config) (*ServiceRegistry, error) {
@@ -12,27 +21,25 @@ func NewServiceRegistry(cfg *Config) (*ServiceRegistry, error) {
 		return nil, fmt.Errorf("ecs clusterName is required")
 	}
 
-	if len(cfg.Services) == 0 {
-		return nil, fmt.Errorf("services config is empty")
+	fmt.Println("Service Registry Path:", cfg.ServiceRegistry.Path)
+	bytes, err := os.ReadFile(cfg.ServiceRegistry.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read service registry file: %w", err)
 	}
 
-	for name, svc := range cfg.Services {
-		if svc.ECSServiceName == "" {
-			return nil, fmt.Errorf("service %s ecsServiceName is required", name)
-		}
-
-		if svc.MinCount < 0 {
-			return nil, fmt.Errorf("service %s minCount must be >= 0", name)
-		}
-
-		if svc.MaxCount < svc.MinCount {
-			return nil, fmt.Errorf("service %s maxCount must be >= minCount", name)
-		}
+	var file serviceRegistryFile
+	if err := yaml.Unmarshal(bytes, &file); err != nil {
+		return nil, fmt.Errorf("failed to parse service registry file: %w", err)
 	}
+
+	if len(file.Services) == 0 {
+		return nil, fmt.Errorf("service registry is empty")
+	}
+
+	fmt.Printf("services: %+v\n", file.Services)
 
 	return &ServiceRegistry{
-		clusterName: cfg.ECS.ClusterName,
-		services:    cfg.Services,
+		services: file.Services,
 	}, nil
 
 }

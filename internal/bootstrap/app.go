@@ -31,7 +31,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 
-	useCases := NewUseCases(clients, serviceRegistry)
+	useCases := NewUseCases(clients, cfg.ECS, serviceRegistry)
 	handlers := NewHandlers(useCases)
 	router := NewRouter(handlers)
 

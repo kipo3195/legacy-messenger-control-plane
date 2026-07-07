@@ -1,0 +1,24 @@
+services:
+  ws:
+    ecsServiceName: ucware-ws-service
+    displayName: WebSocket Service
+    scalable: true
+    minCount: 0
+    maxCount: 3
+    loadBalancerType: alb
+
+  ds:
+    ecsServiceName: ucware-ds-service
+    displayName: Dispatcher Service
+    scalable: false
+    minCount: 0
+    maxCount: 1
+    loadBalancerType: nlb
+
+  ns:
+    ecsServiceName: ucware-ns-service
+    displayName: Notificator Service
+    scalable: false
+    minCount: 0
+    maxCount: 1
+    loadBalancerType: alb

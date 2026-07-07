@@ -14,10 +14,11 @@ type UseCases struct {
 	// ConnectionPressure *application.ConnectionPressureUseCase
 }
 
-func NewUseCases(clients *Clients, registry *configs.ServiceRegistry) *UseCases {
+func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) *UseCases {
 	return &UseCases{
 		ServiceStatus: application.NewServiceStatusUsecase(
 			clients.ECS,
+			ecsCfg,
 			registry,
 		),
 

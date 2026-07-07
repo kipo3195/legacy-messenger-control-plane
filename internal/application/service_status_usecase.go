@@ -9,20 +9,30 @@ import (
 
 type serviceStatusUsecase struct {
 	ecsPort  ports.ECSPort
+	ecsCfg   *configs.ECSConfig
 	registry *configs.ServiceRegistry
 }
 
 type ServiceStatusUsecase interface {
-	GetServiceStatus(clusterName string, ecsServiceName string) (*domain.ServiceStatus, error)
+	GetServiceStatus(ctx context.Context, ecsServiceName string) (*domain.ServiceStatus, error)
 }
 
-func NewServiceStatusUsecase(ecsPort ports.ECSPort, registry *configs.ServiceRegistry) ServiceStatusUsecase {
+func NewServiceStatusUsecase(ecsPort ports.ECSPort, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) ServiceStatusUsecase {
 	return &serviceStatusUsecase{
 		ecsPort:  ecsPort,
+		ecsCfg:   ecsCfg,
 		registry: registry,
 	}
 }
 
-func (s *serviceStatusUsecase) GetServiceStatus(clusterName string, ecsServiceName string) (*domain.ServiceStatus, error) {
-	return s.ecsPort.DescribeService(context.Background(), clusterName, ecsServiceName)
+func (s *serviceStatusUsecase) GetServiceStatus(ctx context.Context, serviceName string) (*domain.ServiceStatus, error) {
+
+	serviceDef, err := s.registry.Find(serviceName)
+	if err != nil {
+		return nil, err
+	}
+
+	ecsServiceName := serviceDef.ECSServiceName
+
+	return s.ecsPort.DescribeService(ctx, s.ecsCfg.ClusterName, ecsServiceName)
 }

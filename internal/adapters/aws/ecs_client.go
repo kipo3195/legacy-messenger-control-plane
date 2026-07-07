@@ -36,11 +36,8 @@ func NewECSClient(ctx context.Context, region string) (*ECSClient, error) {
 	}, nil
 }
 
-func (c *ECSClient) DescribeService(
-	ctx context.Context,
-	clusterName string,
-	ecsServiceName string,
-) (*domain.ServiceStatus, error) {
+func (c *ECSClient) DescribeService(ctx context.Context, clusterName string, ecsServiceName string) (*domain.ServiceStatus, error) {
+
 	if clusterName == "" {
 		return nil, fmt.Errorf("clusterName is required")
 	}
@@ -64,6 +61,8 @@ func (c *ECSClient) DescribeService(
 	svc := out.Services[0]
 
 	status := &domain.ServiceStatus{
+		ServiceName:    ecsServiceName,
+		ClusterName:    clusterName,
 		Status:         ptrString(svc.Status),
 		DesiredCount:   svc.DesiredCount,
 		RunningCount:   svc.RunningCount,
