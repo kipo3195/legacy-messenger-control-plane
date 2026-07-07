@@ -7,4 +7,5 @@ import (
 
 type ECSPort interface {
 	DescribeService(ctx context.Context, clusterName string, ecsServiceName string) (*domain.ServiceStatus, error)
+	DescribeTask(ctx context.Context, clusterName string, ecsServiceName string, desiredStatus string) ([]domain.TaskStatus, error)
 }

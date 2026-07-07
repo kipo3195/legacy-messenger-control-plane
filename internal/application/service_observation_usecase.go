@@ -15,7 +15,7 @@ type serviceObservationUsecase struct {
 }
 
 type ServiceObservationUsecase interface {
-	GetServiceStatus(ctx context.Context, ecsServiceName string) (*domain.ServiceStatus, error)
+	GetServiceStatus(ctx context.Context, serviceName string) (*domain.ServiceStatus, error)
 	GetServiceList(ctx context.Context) ([]domain.ServiceList, error)
 }
 
@@ -35,7 +35,6 @@ func (s *serviceObservationUsecase) GetServiceStatus(ctx context.Context, servic
 	}
 
 	ecsServiceName := serviceDef.ECSServiceName
-
 	return s.ecsPort.DescribeService(ctx, s.ecsCfg.ClusterName, ecsServiceName)
 }
 

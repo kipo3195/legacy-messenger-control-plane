@@ -7,6 +7,7 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+// ECS에 올라가는 service 메타데이터 저장소
 type ServiceRegistry struct {
 	clusterName string
 	services    map[string]ServiceDef

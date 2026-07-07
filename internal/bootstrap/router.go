@@ -22,8 +22,10 @@ func NewRouter(handlers *Handlers) *gin.Engine {
 	{
 		services := v1.Group("/services")
 		{
-			services.GET("", handlers.Service.GetServiceListStatus)
-			services.GET("/:serviceName/status", handlers.Service.GetServiceStatus)
+			services.GET("", handlers.ServiceObservation.GetServiceListStatus)
+			services.GET("/:serviceName/status", handlers.ServiceObservation.GetServiceStatus)
+			services.GET("/:serviceName/task", handlers.TaskObservation.GetTaskStatus)
+
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 
 type UseCases struct {
 	ServiceObservationStatus application.ServiceObservationUsecase
+	TaskObservationStatus    application.TaskObservationUsecase
 	// ScaleService       *application.ScaleServiceUseCase
 	// RedeployService    *application.RedeployServiceUseCase
 	// TargetHealth       *application.TargetHealthUseCase
@@ -20,7 +21,11 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			ecsCfg,
 			registry,
 		),
-
+		TaskObservationStatus: application.NewTaskObservationUsecase(
+			clients.ECS,
+			ecsCfg,
+			registry,
+		),
 		// ScaleService: application.NewScaleServiceUseCase(
 		// 	clients.ECS,
 		// 	registry,
