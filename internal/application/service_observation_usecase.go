@@ -49,7 +49,8 @@ func (s *serviceObservationUsecase) GetServiceList(ctx context.Context) ([]domai
 		ecsServiceName := v.ECSServiceName
 		serviceStatus, err := s.ecsPort.DescribeService(ctx, clusterName, ecsServiceName)
 		if err != nil {
-
+			return nil, fmt.Errorf("[GetServiceList] %v DescribeService error", ecsServiceName)
+		} else {
 			service := domain.ServiceList{
 				ServiceName: ecsServiceName,
 				Status:      serviceStatus.Status,
@@ -57,8 +58,6 @@ func (s *serviceObservationUsecase) GetServiceList(ctx context.Context) ([]domai
 			}
 
 			serviceList = append(serviceList, service)
-		} else {
-			return nil, fmt.Errorf("[GetServiceList] %v DescribeService error", ecsServiceName)
 		}
 	}
 
