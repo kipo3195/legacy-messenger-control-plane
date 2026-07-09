@@ -10,7 +10,7 @@ type ConnectionPressure struct {
 	DesiredCount          int     `json:"desiredCount"`
 
 	ConnectionPerTask        float64 `json:"connectionPerTask"`
-	TargetConnectionsPerTask int     `json:"targetConnectionsPerTask"`
+	TargetConnectionsPerTask int     `json:"targetConnectionPesrTask"`
 
 	PressureStatus string `json:"pressureStatus"`
 

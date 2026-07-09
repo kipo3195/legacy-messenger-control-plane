@@ -1,12 +1,13 @@
 package bootstrap
 
-import httpadapter "legacy-messenger-control-plane/internal/adapters/http"
+import httpadapter "legacy-messenger-control-plane/internal/adapters/http/handler"
 
 type Handlers struct {
 	ServiceObservation *httpadapter.ServiceObservationHandler
 	TaskObservation    *httpadapter.TaskObservationHandler
 	TargetHealth       *httpadapter.TargetHealthHandler
 	ConnectionPressure *httpadapter.ConnectionPressureHandler
+	ServiceScale       *httpadapter.ServiceScaleHandler
 }
 
 func NewHandlers(useCases *UseCases) *Handlers {
@@ -22,6 +23,9 @@ func NewHandlers(useCases *UseCases) *Handlers {
 		),
 		ConnectionPressure: httpadapter.NewConnectionPressureHandler(
 			useCases.ConnectionPressure,
+		),
+		ServiceScale: httpadapter.NewServiceScaleHandler(
+			useCases.ServiceScale,
 		),
 	}
 }

@@ -2,48 +2,49 @@ package bootstrap
 
 import (
 	"legacy-messenger-control-plane/configs"
-	"legacy-messenger-control-plane/internal/application"
+	"legacy-messenger-control-plane/internal/application/usecase"
 )
 
 type UseCases struct {
-	ServiceObservationStatus application.ServiceObservationUsecase
-	TaskObservationStatus    application.TaskObservationUsecase
-	// ScaleService       *application.ScaleServiceUseCase
+	ServiceObservationStatus usecase.ServiceObservationUsecase
+	TaskObservationStatus    usecase.TaskObservationUsecase
+	ServiceScale             usecase.ServiceScaleUsecase
 	// RedeployService    *application.RedeployServiceUseCase
-	TargetHealth       application.TargetHealthUsecase
-	ConnectionPressure application.ConnectionPressureUsecase
+	TargetHealth       usecase.TargetHealthUsecase
+	ConnectionPressure usecase.ConnectionPressureUsecase
 }
 
 func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) *UseCases {
 	return &UseCases{
-		ServiceObservationStatus: application.NewServiceObservationUsecase(
+		ServiceObservationStatus: usecase.NewServiceObservationUsecase(
 			clients.ECS,
 			ecsCfg,
 			registry,
 		),
-		TaskObservationStatus: application.NewTaskObservationUsecase(
+		TaskObservationStatus: usecase.NewTaskObservationUsecase(
 			clients.ECS,
 			ecsCfg,
 			registry,
 		),
-		// ScaleService: application.NewScaleServiceUseCase(
-		// 	clients.ECS,
-		// 	registry,
-		// ),
+		ServiceScale: usecase.NewServiceScaleUsecase(
+			clients.ECS,
+			ecsCfg,
+			registry,
+		),
 
 		// RedeployService: application.NewRedeployServiceUseCase(
 		// 	clients.ECS,
 		// 	registry,
 		// ),
 
-		TargetHealth: application.NewTargetHealthUsecase(
+		TargetHealth: usecase.NewTargetHealthUsecase(
 			clients.ECS,
 			clients.ELB,
 			ecsCfg,
 			registry,
 		),
 
-		ConnectionPressure: application.NewConnectionPressureUsecase(
+		ConnectionPressure: usecase.NewConnectionPressureUsecase(
 			clients.ECS,
 			clients.ELB,
 			clients.CloudWatch,

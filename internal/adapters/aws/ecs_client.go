@@ -361,3 +361,61 @@ func (c *ECSClient) GetServiceTargetGroupArn(ctx context.Context, clusterName st
 
 	return *targetGroupArn, nil
 }
+
+func (c *ECSClient) GetServiceControlState(ctx context.Context, clusterName string, ecsServiceName string) (domain.ECSServiceControlState, error) {
+
+	out, err := c.client.DescribeServices(ctx, &ecs.DescribeServicesInput{
+		Cluster:  aws.String(clusterName),
+		Services: []string{ecsServiceName},
+	})
+	if err != nil {
+		return domain.ECSServiceControlState{}, fmt.Errorf("describe ecs service failed: %w", err)
+	}
+
+	if len(out.Failures) > 0 {
+		return domain.ECSServiceControlState{}, fmt.Errorf(
+			"ecs service describe failure: arn=%s reason=%s",
+			aws.ToString(out.Failures[0].Arn),
+			aws.ToString(out.Failures[0].Reason),
+		)
+	}
+
+	if len(out.Services) == 0 {
+		return domain.ECSServiceControlState{}, fmt.Errorf("ecs service not found: %s", ecsServiceName)
+	}
+
+	return toECSServiceControlState(out.Services[0]), nil
+}
+
+func (c *ECSClient) UpdateServiceDesiredCount(
+	ctx context.Context,
+	clusterName string,
+	ecsServiceName string,
+	desiredCount int,
+) (domain.ECSServiceControlState, error) {
+
+	out, err := c.client.UpdateService(ctx, &ecs.UpdateServiceInput{
+		Cluster:      aws.String(clusterName),
+		Service:      aws.String(ecsServiceName),
+		DesiredCount: aws.Int32(int32(desiredCount)),
+	})
+	if err != nil {
+		return domain.ECSServiceControlState{}, fmt.Errorf("update ecs service desiredCount failed: %w", err)
+	}
+
+	if out.Service == nil {
+		return domain.ECSServiceControlState{}, fmt.Errorf("update ecs service returned empty service")
+	}
+
+	return toECSServiceControlState(*out.Service), nil
+}
+
+func toECSServiceControlState(s types.Service) domain.ECSServiceControlState {
+	return domain.ECSServiceControlState{
+		ECSServiceName: aws.ToString(s.ServiceName),
+		DesiredCount:   s.DesiredCount,
+		RunningCount:   s.RunningCount,
+		PendingCount:   s.PendingCount,
+		Status:         aws.ToString(s.Status),
+	}
+}

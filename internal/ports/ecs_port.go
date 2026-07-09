@@ -10,4 +10,6 @@ type ECSPort interface {
 	DescribeTask(ctx context.Context, clusterName string, ecsServiceName string, desiredStatus string) ([]domain.TaskStatus, error)
 	GetServiceTargetGroups(ctx context.Context, clusterName string, ecsServiceName string) ([]domain.ServiceTargetGroup, error)
 	GetServiceTargetGroupArn(ctx context.Context, clusterName string, ecsServiceName string) (string, error)
+	GetServiceControlState(ctx context.Context, clusterName string, ecsServiceName string) (domain.ECSServiceControlState, error)
+	UpdateServiceDesiredCount(ctx context.Context, clusterName string, ecsServiceName string, desiredCount int) (domain.ECSServiceControlState, error)
 }
