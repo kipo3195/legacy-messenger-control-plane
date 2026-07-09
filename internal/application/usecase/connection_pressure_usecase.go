@@ -2,13 +2,11 @@ package usecase
 
 import (
 	"context"
-	"fmt"
 	"legacy-messenger-control-plane/configs"
+	"legacy-messenger-control-plane/internal/application/service"
 	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
 	"math"
-	"strings"
-	"time"
 )
 
 type connectionPressureUsecase struct {
@@ -17,135 +15,26 @@ type connectionPressureUsecase struct {
 	cloudWatch ports.CloudWatchPort
 	elbPort    ports.ELBPort
 	registry   *configs.ServiceRegistry
+	calculator service.ConnectionPressureCalculator
 }
 
 type ConnectionPressureUsecase interface {
 	GetConnectionStatus(ctx context.Context, serviceName string) (domain.ConnectionPressure, error)
 }
 
-func NewConnectionPressureUsecase(ecsPort ports.ECSPort, elbPort ports.ELBPort, cloudWatch ports.CloudWatchPort, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) ConnectionPressureUsecase {
+func NewConnectionPressureUsecase(ecsPort ports.ECSPort, elbPort ports.ELBPort, cloudWatch ports.CloudWatchPort, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry, calculator service.ConnectionPressureCalculator) ConnectionPressureUsecase {
 	return &connectionPressureUsecase{
 		ecsPort:    ecsPort,
 		elbPort:    elbPort,
 		cloudWatch: cloudWatch,
 		ecsCfg:     ecsCfg,
 		registry:   registry,
+		calculator: calculator,
 	}
 }
 
-const (
-	defaultTargetConnectionsPerTask = 1500
-	defaultMetricPeriodSeconds      = int32(60)
-	defaultMetricLookbackMinutes    = 5
-)
-
 func (s *connectionPressureUsecase) GetConnectionStatus(ctx context.Context, serviceName string) (domain.ConnectionPressure, error) {
-	if serviceName == "" {
-		return domain.ConnectionPressure{}, fmt.Errorf("serviceName is required")
-	}
-
-	serviceDef, err := s.registry.Find(serviceName)
-	if err != nil {
-		return domain.ConnectionPressure{}, err
-	}
-
-	if serviceDef.ECSServiceName == "" {
-		return domain.ConnectionPressure{}, fmt.Errorf("ecsServiceName is empty for service: %s", serviceName)
-	}
-
-	if strings.ToLower(serviceDef.LoadBalancerType) != "alb" {
-		return domain.ConnectionPressure{}, fmt.Errorf(
-			"connection-pressure currently supports alb only. serviceName=%s, loadBalancerType=%s",
-			serviceName,
-			serviceDef.LoadBalancerType,
-		)
-	}
-
-	targetConnectionsPerTask := serviceDef.TargetConnectionsPerTask
-	if targetConnectionsPerTask <= 0 {
-		targetConnectionsPerTask = defaultTargetConnectionsPerTask
-	}
-
-	ecsStatus, err := s.ecsPort.DescribeService(
-		ctx,
-		s.ecsCfg.ClusterName,
-		serviceDef.ECSServiceName,
-	)
-
-	if err != nil {
-		return domain.ConnectionPressure{}, fmt.Errorf("failed to get ecs service status: %w", err)
-	}
-
-	targetGroupArn, err := s.ecsPort.GetServiceTargetGroupArn(
-		ctx,
-		s.ecsCfg.ClusterName,
-		serviceDef.ECSServiceName,
-	)
-	if err != nil {
-		return domain.ConnectionPressure{}, fmt.Errorf("failed to get target group arn: %w", err)
-	}
-
-	loadBalancerArn, err := s.elbPort.GetLoadBalancerArnByTargetGroupArn(
-		ctx,
-		targetGroupArn,
-	)
-
-	if err != nil {
-		return domain.ConnectionPressure{}, fmt.Errorf("failed to get load balancer arn: %w", err)
-	}
-
-	activeConnectionCount, err := s.cloudWatch.GetALBActiveConnectionCount(
-		ctx,
-		loadBalancerArn,
-		int32(defaultMetricPeriodSeconds),
-		time.Duration(defaultMetricLookbackMinutes)*time.Minute,
-	)
-
-	if err != nil {
-		return domain.ConnectionPressure{}, fmt.Errorf("failed to get active connection count: %w", err)
-	}
-
-	runningTaskCount := int(ecsStatus.RunningCount)
-	desiredCount := int(ecsStatus.DesiredCount)
-
-	connectionPerTask := 0.0
-	if runningTaskCount > 0 {
-		connectionPerTask = activeConnectionCount / float64(runningTaskCount)
-	}
-
-	pressureStatus, recommendation := evaluateConnectionPressure(
-		activeConnectionCount,
-		connectionPerTask,
-		runningTaskCount,
-		desiredCount,
-		serviceDef.MinCount,
-		serviceDef.MaxCount,
-		targetConnectionsPerTask,
-	)
-
-	return domain.ConnectionPressure{
-		ServiceName:    serviceName,
-		ECSServiceName: serviceDef.ECSServiceName,
-		ClusterName:    s.ecsCfg.ClusterName,
-
-		ActiveConnectionCount: activeConnectionCount,
-		RunningTaskCount:      runningTaskCount,
-		DesiredCount:          desiredCount,
-
-		ConnectionPerTask:        roundFloat(connectionPerTask, 2),
-		TargetConnectionsPerTask: targetConnectionsPerTask,
-
-		PressureStatus:        pressureStatus,
-		ScalingRecommendation: recommendation,
-
-		Metric: domain.ConnectionPressureMetric{
-			Namespace:       "AWS/ApplicationELB",
-			MetricName:      "ActiveConnectionCount",
-			Stat:            "Average",
-			PeriodSeconds:   defaultMetricPeriodSeconds,
-			LookbackMinutes: defaultMetricLookbackMinutes,
-		},
-	}, nil
+	return s.calculator.Calculate(ctx, serviceName)
 }
 
 func evaluateConnectionPressure(

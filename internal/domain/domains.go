@@ -4,6 +4,7 @@ import (
 	cp "legacy-messenger-control-plane/internal/domain/connectionpressure"
 	svc "legacy-messenger-control-plane/internal/domain/service"
 	sc "legacy-messenger-control-plane/internal/domain/servicecontrol"
+	se "legacy-messenger-control-plane/internal/domain/serviceevaluation"
 	ss "legacy-messenger-control-plane/internal/domain/servicescale"
 	th "legacy-messenger-control-plane/internal/domain/targethealth"
 	tk "legacy-messenger-control-plane/internal/domain/task"
@@ -16,6 +17,13 @@ import (
 type ConnectionPressure = cp.ConnectionPressure
 type ConnectionPressureMetric = cp.ConnectionPressureMetric
 type ScalingRecommendation = cp.ScalingRecommendation
+type ConnectionPressureStatus = cp.ConnectionPressureStatus
+
+const (
+	ConnectionPressureStatusLow    = cp.ConnectionPressureStatusLow
+	ConnectionPressureStatusNormal = cp.ConnectionPressureStatusNormal
+	ConnectionPressureStatusHigh   = cp.ConnectionPressureStatusHigh
+)
 
 // Service observation
 type ServiceList = svc.ServiceList
@@ -51,6 +59,18 @@ type ECSServiceControlState = ss.ECSServiceControlState
 type ServiceScaleCommand = ss.ServiceScaleCommand
 
 // service control
-
 type ServiceRedeployResult = sc.ServiceRedeployResult
 type ServiceDeployment = sc.ServiceDeployment
+
+// service evaluation
+type ScalingCurrentStatus = se.ScalingCurrentStatus
+type ScalingEvaluation = se.ScalingEvaluation
+type ScalingPolicyStatus = se.ScalingPolicyStatus
+type ScalingRecommendationStatus = se.ScalingRecommendationStatus
+
+const (
+	ScalingActionScaleOut    = se.ScalingActionScaleOut
+	ScalingActionScaleIn     = se.ScalingActionScaleIn
+	ScalingActionKeep        = se.ScalingActionKeep
+	ScalingActionNotScalable = se.ScalingActionNotScalable
+)

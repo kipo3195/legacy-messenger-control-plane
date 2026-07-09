@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"legacy-messenger-control-plane/configs"
+	"legacy-messenger-control-plane/internal/application/service"
 	"legacy-messenger-control-plane/internal/application/usecase"
 )
 
@@ -12,9 +13,19 @@ type UseCases struct {
 	ServiceControl           usecase.ServiceControlUsecase
 	TargetHealth             usecase.TargetHealthUsecase
 	ConnectionPressure       usecase.ConnectionPressureUsecase
+	ServiceEvaluation        usecase.ServiceEvaluationUsecase
 }
 
 func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) *UseCases {
+
+	connectionPressureCalculator := service.NewConnectionPressureCalculator(
+		clients.ECS,
+		clients.ELB,
+		clients.CloudWatch,
+		ecsCfg,
+		registry,
+	)
+
 	return &UseCases{
 		ServiceObservationStatus: usecase.NewServiceObservationUsecase(
 			clients.ECS,
@@ -45,6 +56,7 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			clients.CloudWatch,
 			ecsCfg,
 			registry,
+			connectionPressureCalculator,
 		),
 
 		ServiceControl: usecase.NewServiceControlUsecase(
@@ -53,6 +65,15 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			clients.CloudWatch,
 			ecsCfg,
 			registry,
+		),
+
+		ServiceEvaluation: usecase.NewServiceEvaluationUsecase(
+			clients.ECS,
+			clients.ELB,
+			clients.CloudWatch,
+			ecsCfg,
+			registry,
+			connectionPressureCalculator,
 		),
 	}
 }
