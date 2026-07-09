@@ -10,7 +10,7 @@ type UseCases struct {
 	TaskObservationStatus    application.TaskObservationUsecase
 	// ScaleService       *application.ScaleServiceUseCase
 	// RedeployService    *application.RedeployServiceUseCase
-	// TargetHealth       *application.TargetHealthUseCase
+	TargetHealth application.TargetHealthUsecase
 	// ConnectionPressure *application.ConnectionPressureUseCase
 }
 
@@ -36,10 +36,12 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 		// 	registry,
 		// ),
 
-		// TargetHealth: application.NewTargetHealthUseCase(
-		// 	clients.ELB,
-		// 	registry,
-		// ),
+		TargetHealth: application.NewTargetHealthUsecase(
+			clients.ECS,
+			ecsCfg,
+			clients.ELB,
+			registry,
+		),
 
 		// ConnectionPressure: application.NewConnectionPressureUseCase(
 		// 	clients.ECS,

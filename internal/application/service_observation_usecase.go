@@ -35,6 +35,10 @@ func (s *serviceObservationUsecase) GetServiceStatus(ctx context.Context, servic
 	}
 
 	ecsServiceName := serviceDef.ECSServiceName
+	if ecsServiceName == "" {
+		return nil, fmt.Errorf("ecsServiceName is empty for service: %s", serviceName)
+	}
+
 	return s.ecsPort.DescribeService(ctx, s.ecsCfg.ClusterName, ecsServiceName)
 }
 
@@ -44,6 +48,10 @@ func (s *serviceObservationUsecase) GetServiceList(ctx context.Context) ([]domai
 	services := s.registry.List()
 
 	clusterName := s.ecsCfg.ClusterName
+	if clusterName == "" {
+		return nil, fmt.Errorf("clusterNams is empty")
+	}
+
 	for _, v := range services {
 
 		ecsServiceName := v.ECSServiceName

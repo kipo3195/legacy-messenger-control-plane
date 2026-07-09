@@ -26,6 +26,8 @@ func NewRouter(handlers *Handlers) *gin.Engine {
 			services.GET("/:serviceName/status", handlers.ServiceObservation.GetServiceStatus)
 			services.GET("/:serviceName/task", handlers.TaskObservation.GetTaskStatus)
 
+			services.GET("/:serviceName/target-health", handlers.TargetHealth.GetTargetHealth)
+
 		}
 	}
 

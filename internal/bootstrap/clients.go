@@ -10,7 +10,7 @@ import (
 type Clients struct {
 	ECS ports.ECSPort
 	// CloudWatch ports.MetricPort
-	// ELB        ports.TargetHealthPort
+	ELB ports.ELBPort
 }
 
 func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
@@ -24,14 +24,14 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 	// 	return nil, err
 	// }
 
-	// elbClient, err := aws.NewELBV2Client(ctx, cfg.AWS.Region)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	elbClient, err := aws.NewELBV2Client(ctx, cfg.AWS.Region)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Clients{
 		ECS: ecsClient,
 		// CloudWatch: cloudWatchClient,
-		// ELB:        elbClient,
+		ELB: elbClient,
 	}, nil
 }

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
@@ -33,6 +34,9 @@ func (s *taskObservationUsecase) GetTaskStatus(ctx context.Context, serviceName 
 	}
 
 	ecsServiceName := serviceDef.ECSServiceName
+	if ecsServiceName == "" {
+		return nil, fmt.Errorf("ecsServiceName is empty for service: %s", serviceName)
+	}
 
 	taskStatus, err := s.ecsPort.DescribeTask(ctx, s.ecsCfg.ClusterName, ecsServiceName, desiredStatus)
 	if err != nil {

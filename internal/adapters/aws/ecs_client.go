@@ -49,28 +49,22 @@ func (c *ECSClient) DescribeService(ctx context.Context, clusterName string, ecs
 		return nil, fmt.Errorf("ecsServiceName is required")
 	}
 
-	out, err := c.client.DescribeServices(ctx, &ecs.DescribeServicesInput{
-		Cluster:  &clusterName,
-		Services: []string{ecsServiceName},
-	})
+	svc, err := c.describeECSService(ctx, clusterName, ecsServiceName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to describe ecs service %s: %w", ecsServiceName, err)
+		return nil, err
 	}
-
-	if len(out.Services) == 0 {
-		return nil, fmt.Errorf("ecs service not found: %s", ecsServiceName)
-	}
-
-	svc := out.Services[0]
 
 	status := &domain.ServiceStatus{
 		ServiceName:    ecsServiceName,
+		ECSServiceName: ecsServiceName,
 		ClusterName:    clusterName,
 		Status:         ptrString(svc.Status),
 		DesiredCount:   svc.DesiredCount,
 		RunningCount:   svc.RunningCount,
 		PendingCount:   svc.PendingCount,
 		TaskDefinition: ptrString(svc.TaskDefinition),
+		Deployments:    make([]domain.DeploymentStatus, 0),
+		Events:         make([]domain.ServiceEvent, 0),
 	}
 
 	for _, d := range svc.Deployments {
@@ -283,4 +277,71 @@ func toECSDesiredStatus(status string) types.DesiredStatus {
 	default:
 		return types.DesiredStatusRunning
 	}
+}
+
+func (c *ECSClient) GetServiceTargetGroups(ctx context.Context, clusterName string, ecsServiceName string) ([]domain.ServiceTargetGroup, error) {
+	svc, err := c.describeECSService(ctx, clusterName, ecsServiceName)
+	if err != nil {
+		return nil, err
+	}
+
+	targetGroups := make([]domain.ServiceTargetGroup, 0)
+
+	for _, lb := range svc.LoadBalancers {
+		if lb.TargetGroupArn == nil || *lb.TargetGroupArn == "" {
+			continue
+		}
+
+		targetGroups = append(targetGroups, domain.ServiceTargetGroup{
+			TargetGroupArn: *lb.TargetGroupArn,
+			ContainerName:  ptrString(lb.ContainerName),
+			ContainerPort:  lb.ContainerPort,
+		})
+	}
+
+	return targetGroups, nil
+}
+
+// 공통 함수
+func (c *ECSClient) describeECSService(ctx context.Context, clusterName string, ecsServiceName string) (*types.Service, error) {
+	if clusterName == "" {
+		return nil, fmt.Errorf("clusterName is required")
+	}
+
+	if ecsServiceName == "" {
+		return nil, fmt.Errorf("ecsServiceName is required")
+	}
+
+	out, err := c.client.DescribeServices(ctx, &ecs.DescribeServicesInput{
+		Cluster:  &clusterName,
+		Services: []string{ecsServiceName},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe ecs service %s: %w", ecsServiceName, err)
+	}
+
+	if len(out.Services) == 0 {
+		return nil, fmt.Errorf("ecs service not found: %s", ecsServiceName)
+	}
+
+	return &out.Services[0], nil
+}
+
+func (c *ECSClient) GetServiceTargetGroupArns(ctx context.Context, clusterName string, ecsServiceName string) ([]string, error) {
+	svc, err := c.describeECSService(ctx, clusterName, ecsServiceName)
+	if err != nil {
+		return nil, err
+	}
+
+	targetGroupArns := make([]string, 0)
+
+	for _, lb := range svc.LoadBalancers {
+		if lb.TargetGroupArn == nil {
+			continue
+		}
+
+		targetGroupArns = append(targetGroupArns, *lb.TargetGroupArn)
+	}
+
+	return targetGroupArns, nil
 }
