@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 )
 
@@ -118,4 +119,30 @@ func extractTargetGroupName(targetGroupArn string) string {
 	}
 
 	return ""
+}
+
+func (c *ELBClient) GetLoadBalancerArnByTargetGroupArn(ctx context.Context, targetGroupArn string) (string, error) {
+
+	if targetGroupArn == "" {
+		return "", fmt.Errorf("targetGroupArn is required")
+	}
+
+	out, err := c.client.DescribeTargetGroups(ctx, &elasticloadbalancingv2.DescribeTargetGroupsInput{
+		TargetGroupArns: []string{targetGroupArn},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to describe target group: %w", err)
+	}
+
+	if len(out.TargetGroups) == 0 {
+		return "", fmt.Errorf("target group not found: %s", targetGroupArn)
+	}
+
+	tg := out.TargetGroups[0]
+
+	if len(tg.LoadBalancerArns) == 0 {
+		return "", fmt.Errorf("load balancer arn not found for target group: %s", targetGroupArn)
+	}
+
+	return tg.LoadBalancerArns[0], nil
 }

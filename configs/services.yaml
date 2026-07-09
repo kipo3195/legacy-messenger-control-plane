@@ -6,6 +6,7 @@ services:
     minCount: 0
     maxCount: 3
     loadBalancerType: alb
+    targetConnectionsPerTask: 30
 
   ds:
     ecsServiceName: ucware-ds-service

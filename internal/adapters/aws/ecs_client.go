@@ -327,21 +327,37 @@ func (c *ECSClient) describeECSService(ctx context.Context, clusterName string, 
 	return &out.Services[0], nil
 }
 
-func (c *ECSClient) GetServiceTargetGroupArns(ctx context.Context, clusterName string, ecsServiceName string) ([]string, error) {
-	svc, err := c.describeECSService(ctx, clusterName, ecsServiceName)
+func (c *ECSClient) GetServiceTargetGroupArn(ctx context.Context, clusterName string, ecsServiceName string) (string, error) {
+	if clusterName == "" {
+		return "", fmt.Errorf("clusterName is required")
+	}
+
+	if ecsServiceName == "" {
+		return "", fmt.Errorf("ecsServiceName is required")
+	}
+
+	out, err := c.client.DescribeServices(ctx, &ecs.DescribeServicesInput{
+		Cluster:  aws.String(clusterName),
+		Services: []string{ecsServiceName},
+	})
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("failed to describe ecs service: %w", err)
 	}
 
-	targetGroupArns := make([]string, 0)
-
-	for _, lb := range svc.LoadBalancers {
-		if lb.TargetGroupArn == nil {
-			continue
-		}
-
-		targetGroupArns = append(targetGroupArns, *lb.TargetGroupArn)
+	if len(out.Services) == 0 {
+		return "", fmt.Errorf("ecs service not found: %s", ecsServiceName)
 	}
 
-	return targetGroupArns, nil
+	service := out.Services[0]
+
+	if len(service.LoadBalancers) == 0 {
+		return "", fmt.Errorf("load balancer not configured for ecs service: %s", ecsServiceName)
+	}
+
+	targetGroupArn := service.LoadBalancers[0].TargetGroupArn
+	if targetGroupArn == nil || *targetGroupArn == "" {
+		return "", fmt.Errorf("targetGroupArn is empty for ecs service: %s", ecsServiceName)
+	}
+
+	return *targetGroupArn, nil
 }

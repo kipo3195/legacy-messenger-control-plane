@@ -18,11 +18,11 @@ type TargetHealthUsecase interface {
 	GetTargetHealth(ctx context.Context, serviceName string) (*domain.TargetHealthResponse, error)
 }
 
-func NewTargetHealthUsecase(ecsPort ports.ECSPort, ecsCfg *configs.ECSConfig, elbPort ports.ELBPort, registry *configs.ServiceRegistry) TargetHealthUsecase {
+func NewTargetHealthUsecase(ecsPort ports.ECSPort, elbPort ports.ELBPort, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) TargetHealthUsecase {
 	return &targetHealthUsecase{
 		ecsPort:  ecsPort,
-		ecsCfg:   ecsCfg,
 		elbPort:  elbPort,
+		ecsCfg:   ecsCfg,
 		registry: registry,
 	}
 }

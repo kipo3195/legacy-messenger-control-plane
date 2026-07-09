@@ -26,12 +26,13 @@ type ECSConfig struct {
 
 // Control Plane이 관리할 ECS 서비스 목록과 운영 정책을 메모리에 올려두는 객체
 type ServiceDef struct {
-	ECSServiceName   string `yaml:"ecsServiceName" mapstructure:"ecsServiceName"`
-	DisplayName      string `yaml:"displayName" mapstructure:"displayName"`
-	Scalable         bool   `yaml:"scalable" mapstructure:"scalable"`
-	MinCount         int    `yaml:"minCount" mapstructure:"minCount"`
-	MaxCount         int    `yaml:"maxCount" mapstructure:"maxCount"`
-	LoadBalancerType string `yaml:"loadBalancerType" mapstructure:"loadBalancerType"`
+	ECSServiceName           string `yaml:"ecsServiceName" mapstructure:"ecsServiceName"`
+	DisplayName              string `yaml:"displayName" mapstructure:"displayName"`
+	Scalable                 bool   `yaml:"scalable" mapstructure:"scalable"`
+	MinCount                 int    `yaml:"minCount" mapstructure:"minCount"`
+	MaxCount                 int    `yaml:"maxCount" mapstructure:"maxCount"`
+	LoadBalancerType         string `yaml:"loadBalancerType" mapstructure:"loadBalancerType"`
+	TargetConnectionsPerTask int    `yaml:"targetConnectionsPerTask" mapstructure:"targetConnectionsPerTask"`
 }
 
 type ServiceRegistryConfig struct {

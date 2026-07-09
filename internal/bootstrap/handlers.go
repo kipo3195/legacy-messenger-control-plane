@@ -6,6 +6,7 @@ type Handlers struct {
 	ServiceObservation *httpadapter.ServiceObservationHandler
 	TaskObservation    *httpadapter.TaskObservationHandler
 	TargetHealth       *httpadapter.TargetHealthHandler
+	ConnectionPressure *httpadapter.ConnectionPressureHandler
 }
 
 func NewHandlers(useCases *UseCases) *Handlers {
@@ -18,6 +19,9 @@ func NewHandlers(useCases *UseCases) *Handlers {
 		),
 		TargetHealth: httpadapter.NewTargetHealthHandler(
 			useCases.TargetHealth,
+		),
+		ConnectionPressure: httpadapter.NewConnectionPressureHandler(
+			useCases.ConnectionPressure,
 		),
 	}
 }

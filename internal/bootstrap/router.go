@@ -27,6 +27,7 @@ func NewRouter(handlers *Handlers) *gin.Engine {
 			services.GET("/:serviceName/task", handlers.TaskObservation.GetTaskStatus)
 
 			services.GET("/:serviceName/target-health", handlers.TargetHealth.GetTargetHealth)
+			services.GET("/:serviceName/connection-pressure", handlers.ConnectionPressure.GetConnectionStatus)
 
 		}
 	}

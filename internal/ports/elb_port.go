@@ -7,4 +7,5 @@ import (
 
 type ELBPort interface {
 	DescribeTargetHealth(ctx context.Context, targetGroupArn string, loadBalancerType string) (*domain.TargetGroupHealth, error)
+	GetLoadBalancerArnByTargetGroupArn(ctx context.Context, targetGroupArn string) (string, error)
 }

@@ -8,9 +8,9 @@ import (
 )
 
 type Clients struct {
-	ECS ports.ECSPort
-	// CloudWatch ports.MetricPort
-	ELB ports.ELBPort
+	ECS        ports.ECSPort
+	CloudWatch ports.CloudWatchPort
+	ELB        ports.ELBPort
 }
 
 func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
@@ -19,10 +19,10 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 		return nil, err
 	}
 
-	// cloudWatchClient, err := aws.NewCloudWatchClient(ctx, cfg.AWS.Region)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	cloudWatchClient, err := aws.NewCloudWatchClient(ctx, cfg.AWS.Region)
+	if err != nil {
+		return nil, err
+	}
 
 	elbClient, err := aws.NewELBV2Client(ctx, cfg.AWS.Region)
 	if err != nil {
@@ -30,8 +30,8 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 	}
 
 	return &Clients{
-		ECS: ecsClient,
-		// CloudWatch: cloudWatchClient,
-		ELB: elbClient,
+		ECS:        ecsClient,
+		CloudWatch: cloudWatchClient,
+		ELB:        elbClient,
 	}, nil
 }
