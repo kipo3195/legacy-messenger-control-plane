@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -417,5 +418,50 @@ func toECSServiceControlState(s types.Service) domain.ECSServiceControlState {
 		RunningCount:   s.RunningCount,
 		PendingCount:   s.PendingCount,
 		Status:         aws.ToString(s.Status),
+	}
+}
+
+func (c *ECSClient) ForceNewDeployment(ctx context.Context, clusterName string, ecsServiceName string) (domain.ServiceRedeployResult, error) {
+	out, err := c.client.UpdateService(ctx, &ecs.UpdateServiceInput{
+		Cluster:            aws.String(clusterName),
+		Service:            aws.String(ecsServiceName),
+		ForceNewDeployment: true,
+	})
+	if err != nil {
+		return domain.ServiceRedeployResult{}, fmt.Errorf("failed to force new deployment: %w", err)
+	}
+
+	if out.Service == nil {
+		return domain.ServiceRedeployResult{}, errors.New("update service returned nil service")
+	}
+
+	return mapServiceToRedeployResult(clusterName, *out.Service), nil
+}
+
+func mapServiceToRedeployResult(clusterName string, svc types.Service) domain.ServiceRedeployResult {
+	deployments := make([]domain.ServiceDeployment, 0, len(svc.Deployments))
+
+	for _, d := range svc.Deployments {
+		deployments = append(deployments, domain.ServiceDeployment{
+			ID:                 aws.ToString(d.Id),
+			Status:             aws.ToString(d.Status),
+			RolloutState:       string(d.RolloutState),
+			RolloutStateReason: aws.ToString(d.RolloutStateReason),
+			TaskDefinition:     aws.ToString(d.TaskDefinition),
+			DesiredCount:       d.DesiredCount,
+			RunningCount:       d.RunningCount,
+			PendingCount:       d.PendingCount,
+			CreatedAt:          d.CreatedAt,
+			UpdatedAt:          d.UpdatedAt,
+		})
+	}
+
+	return domain.ServiceRedeployResult{
+		ECSServiceName: aws.ToString(svc.ServiceName),
+		ClusterName:    clusterName,
+		DesiredCount:   svc.DesiredCount,
+		RunningCount:   svc.RunningCount,
+		PendingCount:   svc.PendingCount,
+		Deployments:    deployments,
 	}
 }

@@ -3,6 +3,7 @@ package domain
 import (
 	cp "legacy-messenger-control-plane/internal/domain/connectionpressure"
 	svc "legacy-messenger-control-plane/internal/domain/service"
+	sc "legacy-messenger-control-plane/internal/domain/servicecontrol"
 	ss "legacy-messenger-control-plane/internal/domain/servicescale"
 	th "legacy-messenger-control-plane/internal/domain/targethealth"
 	tk "legacy-messenger-control-plane/internal/domain/task"
@@ -48,3 +49,8 @@ type TaskStatus = tk.TaskStatus
 type ServiceScaleResult = ss.ServiceScaleResult
 type ECSServiceControlState = ss.ECSServiceControlState
 type ServiceScaleCommand = ss.ServiceScaleCommand
+
+// service control
+
+type ServiceRedeployResult = sc.ServiceRedeployResult
+type ServiceDeployment = sc.ServiceDeployment

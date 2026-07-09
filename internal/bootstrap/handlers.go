@@ -8,6 +8,7 @@ type Handlers struct {
 	TargetHealth       *httpadapter.TargetHealthHandler
 	ConnectionPressure *httpadapter.ConnectionPressureHandler
 	ServiceScale       *httpadapter.ServiceScaleHandler
+	ServiceControl     *httpadapter.ServiceControlHandler
 }
 
 func NewHandlers(useCases *UseCases) *Handlers {
@@ -26,6 +27,9 @@ func NewHandlers(useCases *UseCases) *Handlers {
 		),
 		ServiceScale: httpadapter.NewServiceScaleHandler(
 			useCases.ServiceScale,
+		),
+		ServiceControl: httpadapter.NewServiceControlHandler(
+			useCases.ServiceControl,
 		),
 	}
 }

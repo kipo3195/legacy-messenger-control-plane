@@ -32,6 +32,8 @@ func NewRouter(handlers *Handlers) *gin.Engine {
 
 			services.POST("/:serviceName/scale", handlers.ServiceScale.UpdateServiceDesiredCount)
 
+			services.POST("/:serviceName/redeploy", handlers.ServiceControl.ReDeploy)
+
 		}
 	}
 

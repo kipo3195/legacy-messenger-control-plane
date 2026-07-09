@@ -12,4 +12,5 @@ type ECSPort interface {
 	GetServiceTargetGroupArn(ctx context.Context, clusterName string, ecsServiceName string) (string, error)
 	GetServiceControlState(ctx context.Context, clusterName string, ecsServiceName string) (domain.ECSServiceControlState, error)
 	UpdateServiceDesiredCount(ctx context.Context, clusterName string, ecsServiceName string, desiredCount int) (domain.ECSServiceControlState, error)
+	ForceNewDeployment(ctx context.Context, clusterName string, ecsServiceName string) (domain.ServiceRedeployResult, error)
 }
