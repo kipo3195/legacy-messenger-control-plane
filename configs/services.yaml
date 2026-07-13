@@ -1,6 +1,6 @@
 services:
   ws:
-    ecsServiceName: ucware-ws-service
+    ecsServiceName: xxxxxx-ws-service
     displayName: WebSocket Service
     scalable: true
     minCount: 0
@@ -9,7 +9,7 @@ services:
     targetConnectionsPerTask: 30
 
   ds:
-    ecsServiceName: ucware-ds-service
+    ecsServiceName: xxxxxx-ds-service
     displayName: Dispatcher Service
     scalable: false
     minCount: 0
@@ -17,7 +17,7 @@ services:
     loadBalancerType: nlb
 
   ns:
-    ecsServiceName: ucware-ns-service
+    ecsServiceName: xxxxxx-ns-service
     displayName: Notificator Service
     scalable: false
     minCount: 0

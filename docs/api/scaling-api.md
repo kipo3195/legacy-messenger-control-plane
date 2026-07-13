@@ -98,8 +98,8 @@ curl -X POST \
 ```json
 {
   "serviceName": "ws",
-  "ecsServiceName": "ucware-ws-service",
-  "clusterName": "ucware-cluster",
+  "ecsServiceName": "xxxxxx-ws-service",
+  "clusterName": "xxxxxx-cluster",
   "action": "SCALE_IN",
   "reason": "connectionPerTask is below scale-in threshold",
   "current": {
