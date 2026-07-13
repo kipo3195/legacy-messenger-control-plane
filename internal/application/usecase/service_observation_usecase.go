@@ -27,7 +27,10 @@ func NewServiceObservationUsecase(ecsPort ports.ECSPort, ecsCfg *configs.ECSConf
 	}
 }
 
-func (s *serviceObservationUsecase) GetServiceStatus(ctx context.Context, serviceName string) (*domain.ServiceStatus, error) {
+func (s *serviceObservationUsecase) GetServiceStatus(
+	ctx context.Context,
+	serviceName string,
+) (*domain.ServiceStatus, error) {
 
 	serviceDef, err := s.registry.Find(serviceName)
 	if err != nil {
@@ -36,10 +39,25 @@ func (s *serviceObservationUsecase) GetServiceStatus(ctx context.Context, servic
 
 	ecsServiceName := serviceDef.ECSServiceName
 	if ecsServiceName == "" {
-		return nil, fmt.Errorf("ecsServiceName is empty for service: %s", serviceName)
+		return nil, fmt.Errorf(
+			"ecsServiceName is empty for service: %s",
+			serviceName,
+		)
 	}
 
-	return s.ecsPort.DescribeService(ctx, s.ecsCfg.ClusterName, ecsServiceName)
+	result, err := s.ecsPort.DescribeService(
+		ctx,
+		s.ecsCfg.ClusterName,
+		ecsServiceName,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	result.ServiceName = serviceName
+	result.ECSServiceName = ecsServiceName
+
+	return result, nil
 }
 
 func (s *serviceObservationUsecase) GetServiceList(ctx context.Context) ([]domain.ServiceList, error) {
@@ -52,21 +70,30 @@ func (s *serviceObservationUsecase) GetServiceList(ctx context.Context) ([]domai
 		return nil, fmt.Errorf("clusterNams is empty")
 	}
 
-	for _, v := range services {
+	for serviceName, serviceDef := range services {
+		ecsServiceName := serviceDef.ECSServiceName
 
-		ecsServiceName := v.ECSServiceName
-		serviceStatus, err := s.ecsPort.DescribeService(ctx, clusterName, ecsServiceName)
+		serviceStatus, err := s.ecsPort.DescribeService(
+			ctx,
+			clusterName,
+			ecsServiceName,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("[GetServiceList] %v DescribeService error", ecsServiceName)
-		} else {
-			service := domain.ServiceList{
-				ServiceName: ecsServiceName,
-				Status:      serviceStatus.Status,
-				Deployments: serviceStatus.Deployments,
-			}
-
-			serviceList = append(serviceList, service)
+			return nil, fmt.Errorf(
+				"[GetServiceList] %s DescribeService error: %w",
+				ecsServiceName,
+				err,
+			)
 		}
+
+		service := domain.ServiceList{
+			ServiceName:    serviceName,
+			ECSServiceName: ecsServiceName,
+			Status:         serviceStatus.Status,
+			Deployments:    serviceStatus.Deployments,
+		}
+
+		serviceList = append(serviceList, service)
 	}
 
 	return serviceList, nil
