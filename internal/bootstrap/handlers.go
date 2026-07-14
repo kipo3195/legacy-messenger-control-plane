@@ -5,6 +5,7 @@ import httpadapter "legacy-messenger-control-plane/internal/adapters/http/handle
 type Handlers struct {
 	ServiceObservation *httpadapter.ServiceObservationHandler
 	TaskObservation    *httpadapter.TaskObservationHandler
+	TaskSessionReport  *httpadapter.TaskSessionReportHandler
 	TargetHealth       *httpadapter.TargetHealthHandler
 	ConnectionPressure *httpadapter.ConnectionPressureHandler
 	ServiceScale       *httpadapter.ServiceScaleHandler
@@ -34,6 +35,9 @@ func NewHandlers(useCases *UseCases) *Handlers {
 		),
 		ServiceEvaluation: httpadapter.NewServiceEvaluationHandler(
 			useCases.ServiceEvaluation,
+		),
+		TaskSessionReport: httpadapter.NewTaskSessionReportHandler(
+			useCases.TaskSessionReport,
 		),
 	}
 }

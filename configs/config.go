@@ -1,7 +1,10 @@
 package configs
 
 import (
+	"fmt"
 	"os"
+	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -10,6 +13,8 @@ type Config struct {
 	ECS             *ECSConfig             `mapstructure:"ecs"`
 	Services        map[string]ServiceDef  `mapstructure:"services"`
 	ServiceRegistry *ServiceRegistryConfig `mapstructure:"serviceRegistry"`
+	SSH             *SSHConfig
+	Redis           *RedisConfig
 }
 
 type ServerConfig struct {
@@ -45,12 +50,20 @@ func Load() (*Config, error) {
 	aws := initAws()
 	ecs := initECS()
 	serviceRegistry := initServiceRegistry()
+	ssh, err := initSsh()
+	redis, err := initRedis()
+
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		Server:          server,
 		AWS:             aws,
 		ECS:             ecs,
 		ServiceRegistry: serviceRegistry,
+		SSH:             ssh,
+		Redis:           redis,
 	}, nil
 }
 
@@ -85,4 +98,57 @@ func initServiceRegistry() *ServiceRegistryConfig {
 	return &ServiceRegistryConfig{
 		Path: path,
 	}
+}
+
+type RedisConfig struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+	DB       int
+}
+
+func initRedis() (*RedisConfig, error) {
+	host := os.Getenv("REDIS_HOST")
+	port := os.Getenv("REDIS_PORT")
+	password := os.Getenv("REDIS_PASSWORD")
+	portNumber, err := strconv.Atoi(port)
+
+	if err != nil {
+		return nil, fmt.Errorf("redis portNumber data is invalid.")
+	}
+
+	return &RedisConfig{
+		Host:     host,
+		Port:     portNumber,
+		Password: password,
+	}, nil
+
+}
+
+type SSHConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Timeout  time.Duration
+}
+
+func initSsh() (*SSHConfig, error) {
+	host := os.Getenv("SSH_HOST")
+	port := os.Getenv("SSH_PORT")
+	user := os.Getenv("SSH_USER")
+	password := os.Getenv("SSH_PASSWORD")
+
+	portNumber, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, fmt.Errorf("ssh portNumber data is invalid.")
+	}
+
+	return &SSHConfig{
+		Host:     host,
+		Port:     portNumber,
+		User:     user,
+		Password: password,
+	}, nil
 }

@@ -9,6 +9,7 @@ import (
 type UseCases struct {
 	ServiceObservationStatus usecase.ServiceObservationUsecase
 	TaskObservationStatus    usecase.TaskObservationUsecase
+	TaskSessionReport        usecase.TaskSessionReportUsecase
 	ServiceScale             usecase.ServiceScaleUsecase
 	ServiceControl           usecase.ServiceControlUsecase
 	TargetHealth             usecase.TargetHealthUsecase
@@ -74,6 +75,10 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			ecsCfg,
 			registry,
 			connectionPressureCalculator,
+		),
+
+		TaskSessionReport: usecase.NewTaskSessionReportUsecase(
+			clients.TaskSession,
 		),
 	}
 }

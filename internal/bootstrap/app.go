@@ -3,8 +3,10 @@ package bootstrap
 import (
 	"context"
 	"legacy-messenger-control-plane/configs"
+	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 type App struct {
@@ -16,6 +18,12 @@ type App struct {
 }
 
 func NewApp(ctx context.Context) (*App, error) {
+
+	if err := godotenv.Load(); err != nil {
+		log.Println(".env file not found, using system environment variables")
+		return nil, err
+	}
+
 	cfg, err := configs.Load()
 	if err != nil {
 		return nil, err

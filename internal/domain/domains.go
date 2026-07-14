@@ -52,6 +52,9 @@ type NetworkBindingInfo = tk.NetworkBindingInfo
 type NetworkInterfaceInfo = tk.NetworkInterfaceInfo
 type ContainerStatus = tk.ContainerStatus
 type TaskStatus = tk.TaskStatus
+type TaskSessionReport = tk.TaskSessionReport
+
+type TaskSessionReportResult = tk.TaskSessionReportResult
 
 // service scale
 type ServiceScaleResult = ss.ServiceScaleResult

@@ -29,6 +29,9 @@ func NewRouter(handlers *Handlers) *gin.Engine {
 			services.GET("/:serviceName/target-health", handlers.TargetHealth.GetTargetHealth)
 			services.GET("/:serviceName/connection-pressure", handlers.ConnectionPressure.GetConnectionStatus)
 
+			// 수집
+			services.PUT("/:serviceName/tasks/:taskId/session-report", handlers.TaskSessionReport.PutTaskSessionReport)
+
 			// 제어
 			services.POST("/:serviceName/scale", handlers.ServiceScale.UpdateServiceDesiredCount)
 			services.POST("/:serviceName/redeploy", handlers.ServiceControl.ReDeploy)
@@ -37,6 +40,7 @@ func NewRouter(handlers *Handlers) *gin.Engine {
 			services.POST("/:serviceName/scaling-evaluate", handlers.ServiceEvaluation.EvaluateScaling)
 
 		}
+
 	}
 
 	return r
