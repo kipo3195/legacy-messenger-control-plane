@@ -15,6 +15,7 @@ type Config struct {
 	ServiceRegistry *ServiceRegistryConfig `mapstructure:"serviceRegistry"`
 	SSH             *SSHConfig
 	Redis           *RedisConfig
+	Scaling         *ScalingConfig
 }
 
 type ServerConfig struct {
@@ -52,6 +53,7 @@ func Load() (*Config, error) {
 	serviceRegistry := initServiceRegistry()
 	ssh, err := initSsh()
 	redis, err := initRedis()
+	scaling := initScaling()
 
 	if err != nil {
 		return nil, err
@@ -64,6 +66,7 @@ func Load() (*Config, error) {
 		ServiceRegistry: serviceRegistry,
 		SSH:             ssh,
 		Redis:           redis,
+		Scaling:         scaling,
 	}, nil
 }
 
@@ -151,4 +154,11 @@ func initSsh() (*SSHConfig, error) {
 		User:     user,
 		Password: password,
 	}, nil
+}
+
+type ScalingConfig struct {
+}
+
+func initScaling() *ScalingConfig {
+	return &ScalingConfig{}
 }

@@ -7,6 +7,7 @@ import (
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/adapters/ssh"
 	"legacy-messenger-control-plane/internal/domain"
+	"log"
 	"net"
 	"strconv"
 
@@ -74,8 +75,6 @@ func (c *redisClient) SaveTaskSessionReport(ctx context.Context, report domain.T
 		report.ServiceName,
 	)
 
-	fmt.Println("reportKey : ", reportKey)
-
 	// ZADD용 key 생성 - task별 만료시간 관리
 	// control-plane:session:{ws}:expires 1784034630 task-001 (같은 Member를 다시 ZADD하면 중복 저장되지 않고 Score가 갱신)
 	// Member : task-001, Score : 1784034630
@@ -86,8 +85,6 @@ func (c *redisClient) SaveTaskSessionReport(ctx context.Context, report domain.T
 		"control-plane:session:{%s}:expires",
 		report.ServiceName,
 	)
-
-	fmt.Println("expireKey : ", expireKey)
 
 	value, err := json.Marshal(domain.TaskSessionValue{
 		SessionCount: report.SessionCount,
@@ -115,6 +112,7 @@ func (c *redisClient) SaveTaskSessionReport(ctx context.Context, report domain.T
 
 		return nil
 	})
+
 	if err != nil {
 		return fmt.Errorf("failed to save task session report: %w", err)
 	}
@@ -128,4 +126,42 @@ func (c *redisClient) Close() error {
 	}
 
 	return c.client.Close()
+}
+
+func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName string) ([]domain.SessionReport, error) {
+
+	reportKey := fmt.Sprintf(
+		"control-plane:session:{%s}:reports",
+		serviceName,
+	)
+
+	var getAllCmd *goredis.MapStringStringCmd
+
+	_, err := c.client.TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
+		getAllCmd = pipe.HGetAll(ctx, reportKey)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to get task session reports: %w",
+			err,
+		)
+	}
+
+	result, err := getAllCmd.Result()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to read task session report result: %w",
+			err,
+		)
+	}
+
+	log.Printf(
+		"task session reports: serviceName=%s key=%s result=%v",
+		serviceName,
+		reportKey,
+		result,
+	)
+
+	return nil, nil
 }

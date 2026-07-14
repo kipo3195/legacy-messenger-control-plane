@@ -43,6 +43,11 @@ func NewApp(ctx context.Context) (*App, error) {
 	handlers := NewHandlers(useCases)
 	router := NewRouter(handlers)
 
+	err = NewScheduler(ctx, useCases)
+	if err != nil {
+		return nil, err
+	}
+
 	return &App{
 		Config:   cfg,
 		Clients:  clients,

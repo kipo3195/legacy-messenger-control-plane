@@ -15,6 +15,7 @@ type UseCases struct {
 	TargetHealth             usecase.TargetHealthUsecase
 	ConnectionPressure       usecase.ConnectionPressureUsecase
 	ServiceEvaluation        usecase.ServiceEvaluationUsecase
+	AutoScale                usecase.SessionAutoScalingUsecase
 }
 
 func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) *UseCases {

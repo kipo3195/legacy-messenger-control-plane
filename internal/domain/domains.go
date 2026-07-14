@@ -2,6 +2,7 @@ package domain
 
 import (
 	cp "legacy-messenger-control-plane/internal/domain/connectionpressure"
+	sca "legacy-messenger-control-plane/internal/domain/scale"
 	svc "legacy-messenger-control-plane/internal/domain/service"
 	sc "legacy-messenger-control-plane/internal/domain/servicecontrol"
 	se "legacy-messenger-control-plane/internal/domain/serviceevaluation"
@@ -71,6 +72,10 @@ type ScalingCurrentStatus = se.ScalingCurrentStatus
 type ScalingEvaluation = se.ScalingEvaluation
 type ScalingPolicyStatus = se.ScalingPolicyStatus
 type ScalingRecommendationStatus = se.ScalingRecommendationStatus
+
+// scale
+type SessionAutoScalingResult = sca.SessionAutoScalingResult
+type SessionReport = sca.SessionReport
 
 const (
 	ScalingActionScaleOut    = se.ScalingActionScaleOut
