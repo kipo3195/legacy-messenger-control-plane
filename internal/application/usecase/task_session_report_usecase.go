@@ -27,7 +27,7 @@ func (h *taskSessionReportUsecase) PutTaskSessionReport(ctx context.Context, cmd
 	reportedAt := time.Now()
 
 	// 만료시간 서버 설정화
-	expiresAt := reportedAt.Add(10)
+	expiresAt := reportedAt.Add(60 * time.Second)
 	report := domain.TaskSessionReport{
 		ServiceName:  cmd.ServiceName,
 		TaskID:       cmd.TaskID,
@@ -36,7 +36,16 @@ func (h *taskSessionReportUsecase) PutTaskSessionReport(ctx context.Context, cmd
 		ExpiresAt:    expiresAt,
 	}
 
-	h.taskSessionPort.SaveTaskSessionReport(ctx, report)
+	err := h.taskSessionPort.SaveTaskSessionReport(ctx, report)
+	if err != nil {
+		return domain.TaskSessionReportResult{}, err
+	}
 
-	return domain.TaskSessionReportResult{}, nil
+	return domain.TaskSessionReportResult{
+		ServiceName:  report.ServiceName,
+		TaskID:       report.TaskID,
+		SessionCount: report.SessionCount,
+		ReportedAt:   report.ReportedAt,
+		ExpiresAt:    report.ExpiresAt,
+	}, nil
 }

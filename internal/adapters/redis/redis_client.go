@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/adapters/ssh"
@@ -64,6 +65,59 @@ func NewRedisClient(ctx context.Context, redisCfg *configs.RedisConfig, sshClien
 func (c *redisClient) SaveTaskSessionReport(ctx context.Context, report domain.TaskSessionReport) error {
 
 	fmt.Printf("[SaveTaskSessionReport] serviceName : %s, taskID : %s, sessionCount : %d \n", report.ServiceName, report.TaskID, report.SessionCount)
+
+	// HSET용 key 생성 - 수집 데이터 관리
+	// control-plane:session:{ws}:reports task-001 '{"sessionCount":120,"reportedAt":"2026-07-14T22:10:00+09:00"}'
+	// 조회 : HGETALL control-plane:session:{ws}:expireKey
+	reportKey := fmt.Sprintf(
+		"control-plane:session:{%s}:reports",
+		report.ServiceName,
+	)
+
+	fmt.Println("reportKey : ", reportKey)
+
+	// ZADD용 key 생성 - task별 만료시간 관리
+	// control-plane:session:{ws}:expires 1784034630 task-001 (같은 Member를 다시 ZADD하면 중복 저장되지 않고 Score가 갱신)
+	// Member : task-001, Score : 1784034630
+	// ZRANGEBYSCORE control-plane:session:{ws}:expires -inf 1784034630 하게되면 만료된 Member를 찾을 수 있음.
+	// 조회 : ZRANGEBYSCORE control-plane:session:{ws}:expires -inf (1784036365 -> ZADD로 저장된 score < 1784036365, 앞에 '('를 제외하면 <=
+	// 조회 : ZRANGEBYSCORE control-plane:session:{ws}:expires (1784036365 +inf -> ZASS로 저장된 score > 1784036365, 앞에 '('를 제외하면 >=
+	expireKey := fmt.Sprintf(
+		"control-plane:session:{%s}:expires",
+		report.ServiceName,
+	)
+
+	fmt.Println("expireKey : ", expireKey)
+
+	value, err := json.Marshal(domain.TaskSessionValue{
+		SessionCount: report.SessionCount,
+		ReportedAt:   report.ReportedAt,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to marshal task session report: %w", err)
+	}
+
+	// TxPipelined는 여러 명령을 MULTI/EXEC으로 감싸 한 번에 실행합니다.
+	// 일반 Pipelined는 네트워크 왕복 횟수를 줄이는 배치 처리이고, TxPipelined는 여기에 Redis 트랜잭션을 추가해 명령들이 중간에 다른 클라이언트 명령과 섞이지 않도록 실행합니다
+	_, err = c.client.TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
+		pipe.HSet(
+			ctx,
+			reportKey,
+			report.TaskID,
+			value,
+		)
+
+		pipe.ZAdd(ctx, expireKey, goredis.Z{
+			Score:  float64(report.ExpiresAt.Unix()),
+			Member: report.TaskID,
+		})
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to save task session report: %w", err)
+	}
 
 	return nil
 }

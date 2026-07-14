@@ -55,6 +55,7 @@ type TaskStatus = tk.TaskStatus
 type TaskSessionReport = tk.TaskSessionReport
 
 type TaskSessionReportResult = tk.TaskSessionReportResult
+type TaskSessionValue = tk.TaskSessionValue
 
 // service scale
 type ServiceScaleResult = ss.ServiceScaleResult
