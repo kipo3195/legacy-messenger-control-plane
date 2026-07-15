@@ -163,5 +163,21 @@ func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName stri
 		result,
 	)
 
+	sessionReport := make([]domain.SessionReport, len(result))
+
+	for k, v := range result {
+		if k != "" && v != "" {
+			data := domain.SessionReport{
+				TaskID: k,
+			}
+			sessionReport = append(sessionReport, data)
+		}
+	}
+
+	return sessionReport, nil
+}
+
+func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName string) (map[string]string, error) {
+
 	return nil, nil
 }

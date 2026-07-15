@@ -18,37 +18,37 @@ type UseCases struct {
 	AutoScale                usecase.SessionAutoScalingUsecase
 }
 
-func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.ServiceRegistry) *UseCases {
+func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.ServiceRegistry) *UseCases {
 
 	connectionPressureCalculator := service.NewConnectionPressureCalculator(
 		clients.ECS,
 		clients.ELB,
 		clients.CloudWatch,
-		ecsCfg,
+		cfg.ECS,
 		registry,
 	)
 
 	return &UseCases{
 		ServiceObservationStatus: usecase.NewServiceObservationUsecase(
 			clients.ECS,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 		),
 		TaskObservationStatus: usecase.NewTaskObservationUsecase(
 			clients.ECS,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 		),
 		ServiceScale: usecase.NewServiceScaleUsecase(
 			clients.ECS,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 		),
 
 		TargetHealth: usecase.NewTargetHealthUsecase(
 			clients.ECS,
 			clients.ELB,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 		),
 
@@ -56,7 +56,7 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			clients.ECS,
 			clients.ELB,
 			clients.CloudWatch,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 			connectionPressureCalculator,
 		),
@@ -65,7 +65,7 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			clients.ECS,
 			clients.ELB,
 			clients.CloudWatch,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 		),
 
@@ -73,13 +73,19 @@ func NewUseCases(clients *Clients, ecsCfg *configs.ECSConfig, registry *configs.
 			clients.ECS,
 			clients.ELB,
 			clients.CloudWatch,
-			ecsCfg,
+			cfg.ECS,
 			registry,
 			connectionPressureCalculator,
 		),
 
 		TaskSessionReport: usecase.NewTaskSessionReportUsecase(
 			clients.TaskSession,
+		),
+
+		AutoScale: usecase.NewSessionAutoScalingUsecase(
+			clients.TaskSession,
+			clients.ECS,
+			registry,
 		),
 	}
 }

@@ -39,11 +39,11 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 
-	useCases := NewUseCases(clients, cfg.ECS, serviceRegistry)
+	useCases := NewUseCases(clients, cfg, serviceRegistry)
 	handlers := NewHandlers(useCases)
 	router := NewRouter(handlers)
 
-	err = NewScheduler(ctx, useCases)
+	err = NewScheduler(ctx, useCases, cfg)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,7 @@ type Config struct {
 	ServiceRegistry *ServiceRegistryConfig `mapstructure:"serviceRegistry"`
 	SSH             *SSHConfig
 	Redis           *RedisConfig
-	Scaling         *ScalingConfig
+	AutoScale       *AutoScaleConfig
 }
 
 type ServerConfig struct {
@@ -66,7 +66,7 @@ func Load() (*Config, error) {
 		ServiceRegistry: serviceRegistry,
 		SSH:             ssh,
 		Redis:           redis,
-		Scaling:         scaling,
+		AutoScale:       scaling,
 	}, nil
 }
 
@@ -156,9 +156,19 @@ func initSsh() (*SSHConfig, error) {
 	}, nil
 }
 
-type ScalingConfig struct {
+type AutoScaleConfig struct {
+	Interval int
 }
 
-func initScaling() *ScalingConfig {
-	return &ScalingConfig{}
+func initScaling() *AutoScaleConfig {
+	intervalStr := os.Getenv("AUTO_SCALE_INTERVAL")
+
+	interval, err := strconv.Atoi(intervalStr)
+	if err != nil {
+		interval = 10
+	}
+
+	return &AutoScaleConfig{
+		Interval: interval,
+	}
 }
