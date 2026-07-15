@@ -6,12 +6,14 @@ import (
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
+	"math"
 )
 
 type sessionAutoScalingUsecase struct {
 	taskSessionPort ports.TaskSessionPort
 	ecsPort         ports.ECSPort
 	registry        *configs.ServiceRegistry
+	autoScale       *configs.AutoScaleConfig
 }
 
 type SessionAutoScalingUsecase interface {
@@ -22,11 +24,13 @@ func NewSessionAutoScalingUsecase(
 	taskSessionPort ports.TaskSessionPort,
 	ecsPort ports.ECSPort,
 	registry *configs.ServiceRegistry,
+	autoScale *configs.AutoScaleConfig,
 ) SessionAutoScalingUsecase {
 	return &sessionAutoScalingUsecase{
 		taskSessionPort: taskSessionPort,
 		ecsPort:         ecsPort,
 		registry:        registry,
+		autoScale:       autoScale,
 	}
 }
 
@@ -39,33 +43,47 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 	// 5. 유효한 보고만으로도 Scale-out 조건을 충족하면 Scale-out은 수행할 수 있다.
 	// 6. 서비스별로 동시에 하나의 Scale-in Drain 작업만 진행한다.
 
+	// 만료, 정상 처리 구분
+	expiredTask := make([]string, 0)
+	normalTask := make([]string, 0)
+
 	// [프로세스]
+
 	// 1. 만료된 task조회 (map형태)
-	expiredMap, err := u.taskSessionPort.GetExpiredReportTask(ctx, serviceName)
-
-	fmt.Println("여기여기여기 : ", expiredMap)
-
+	expiredReport, err := u.taskSessionPort.GetExpiredReportTask(ctx, serviceName)
 	if err != nil {
 		return domain.SessionAutoScalingResult{}, fmt.Errorf("get task session report expired error")
 	}
 	// 2. report 조회
-	reportedList, err := u.taskSessionPort.GetTaskSessionReport(ctx, serviceName)
+	reported, err := u.taskSessionPort.GetTaskSessionReport(ctx, serviceName)
 
 	// 3. report 결과를 순회하면서 유효 report 만료 report 분리
-	for _, value := range reportedList {
-		taskID := value.TaskID
-		_, exists := expiredMap[taskID]
+	for k, _ := range reported {
+		taskID := k
+		_, exists := expiredReport[taskID]
 		if exists {
-			fmt.Printf("serviceName : %s task : %s is expired\n", serviceName, taskID)
+			expiredTask = append(expiredTask, taskID)
 			continue
 		}
-		fmt.Printf("exists task :  %s, data : %s \n", taskID, value)
+		normalTask = append(normalTask, taskID)
 	}
 
 	// 4. Redis report와 ECS Task 비교
 	// 정상 보고, 보고 누락
+	fmt.Printf("expired task : %s, normal task : %s\n", expiredTask, normalTask)
 
 	// 5. 정상 보고 report 커버리지 계산 및 scale out, in 판단
+	totalSessionCount := calculateTotalTaskCount(reported, normalTask)
+
+	requiredTaskCount := calculateRequiredTaskCount(
+		totalSessionCount,
+		u.autoScale.TargetSessionsPerTask,
+		u.autoScale.TargetUtilization,
+		u.autoScale.MinTaskCount,
+		u.autoScale.MaxTaskCount,
+	)
+
+	fmt.Printf("totalSessionCount : %d, desiredCount : %d\n", totalSessionCount, requiredTaskCount)
 
 	// 6. (scale in) 가장 적은수의 sessionCount를 갖는 task에 scale in 통보
 	// desiredCount만 변경한다고해서 선정한 Task가 종료된다고 보장되지 않습니다.
@@ -85,12 +103,54 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 	// i. 서비스가 안정 상태인지 확인
 	// j. 남은 Task의 protection 해제
 
-	// redis 에서 값 조회
-	u.taskSessionPort.GetTaskSessionReport(ctx, serviceName)
-
-	// task 값을 기준으로 scaling 판단
-
-	// desired count 변경 처리
-
 	return domain.SessionAutoScalingResult{}, nil
+}
+
+func calculateTotalTaskCount(reported map[string]domain.SessionReport, normalTask []string) int {
+
+	sum := 0
+
+	for _, k := range normalTask {
+		report, exists := reported[k]
+		if exists {
+			sum += report.SessionCount
+		}
+	}
+
+	return sum
+}
+
+func calculateRequiredTaskCount(
+	totalSessionCount int, // task 전체에 대한 session의 수
+	targetSessionsPerTask int, // task당 추구하는 session의 수
+	targetUtilization float64, // 대응해야하는 비율
+	minTaskCount int, // 최소 task 수
+	maxTaskCount int, // 최대 task 수
+) int {
+	if targetSessionsPerTask <= 0 {
+		return minTaskCount
+	}
+
+	effectiveCapacity :=
+		float64(targetSessionsPerTask) * targetUtilization
+
+	if effectiveCapacity <= 0 {
+		return minTaskCount
+	}
+
+	// 요구되는 task의 수
+	// 전체 연결 sessionCount / task당 scale out 대비 가능한 효과적인 session 수
+	requiredCount := int(math.Ceil(
+		float64(totalSessionCount) / effectiveCapacity,
+	))
+
+	if requiredCount < minTaskCount {
+		return minTaskCount
+	}
+
+	if requiredCount > maxTaskCount {
+		return maxTaskCount
+	}
+
+	return requiredCount
 }

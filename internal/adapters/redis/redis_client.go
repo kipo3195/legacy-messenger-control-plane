@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"time"
 
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -128,7 +129,7 @@ func (c *redisClient) Close() error {
 	return c.client.Close()
 }
 
-func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName string) ([]domain.SessionReport, error) {
+func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName string) (map[string]domain.SessionReport, error) {
 
 	reportKey := fmt.Sprintf(
 		"control-plane:session:{%s}:reports",
@@ -157,27 +158,73 @@ func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName stri
 	}
 
 	log.Printf(
-		"task session reports: serviceName=%s key=%s result=%v",
+		"task session reports: serviceName=%s key=%s result=%v \n",
 		serviceName,
 		reportKey,
 		result,
 	)
 
-	sessionReport := make([]domain.SessionReport, len(result))
+	sessionReportMap := make(map[string]domain.SessionReport, 0)
 
-	for k, v := range result {
-		if k != "" && v != "" {
-			data := domain.SessionReport{
-				TaskID: k,
-			}
-			sessionReport = append(sessionReport, data)
+	for taskID, value := range result {
+		var report domain.SessionReport
+
+		if err := json.Unmarshal([]byte(value), &report); err != nil {
+			return nil, fmt.Errorf(
+				"failed to unmarshal session report: taskID=%s: %w",
+				taskID,
+				err,
+			)
 		}
+		sessionReportMap[taskID] = report
 	}
 
-	return sessionReport, nil
+	return sessionReportMap, nil
 }
 
 func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName string) (map[string]string, error) {
 
-	return nil, nil
+	expiredKey := fmt.Sprintf(
+		"control-plane:session:{%s}:expires",
+		serviceName,
+	)
+
+	// 현재 시간보다 30초 이상 지난 score까지만 조회
+	expiredThreshold := time.Now().Add(-30 * time.Second).Unix()
+
+	results, err := c.client.ZRangeByScoreWithScores(
+		ctx,
+		expiredKey,
+		&goredis.ZRangeBy{
+			Min: "-inf",
+			Max: strconv.FormatInt(expiredThreshold, 10),
+		},
+	).Result()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to get expired report tasks: serviceName=%s: %w",
+			serviceName,
+			err,
+		)
+	}
+
+	expiredTaskMap := make(map[string]string, len(results))
+
+	for _, result := range results {
+		taskID, ok := result.Member.(string)
+		if !ok {
+			return nil, fmt.Errorf(
+				"invalid expired task member type: serviceName=%s member=%v",
+				serviceName,
+				result.Member,
+			)
+		}
+
+		expiredTaskMap[taskID] = strconv.FormatInt(
+			int64(result.Score),
+			10,
+		)
+	}
+
+	return expiredTaskMap, nil
 }

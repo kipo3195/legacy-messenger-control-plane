@@ -157,7 +157,11 @@ func initSsh() (*SSHConfig, error) {
 }
 
 type AutoScaleConfig struct {
-	Interval int
+	Interval              int
+	TargetSessionsPerTask int     // task당 추구하는 session의 수
+	TargetUtilization     float64 // 대응해야하는 비율
+	MinTaskCount          int     // 최소 task 수
+	MaxTaskCount          int     // 최대 task 수
 }
 
 func initScaling() *AutoScaleConfig {
@@ -168,7 +172,17 @@ func initScaling() *AutoScaleConfig {
 		interval = 10
 	}
 
+	targetSessionsPerTaskStr := os.Getenv("AUTO_SCALE_TARGET_SESSION_PER_TASK")
+	targetSessionsPerTask, err := strconv.Atoi(targetSessionsPerTaskStr)
+	if err != nil {
+		targetSessionsPerTask = 1500
+	}
+
 	return &AutoScaleConfig{
-		Interval: interval,
+		Interval:              interval,
+		TargetSessionsPerTask: targetSessionsPerTask,
+		TargetUtilization:     0.8,
+		MinTaskCount:          1,
+		MaxTaskCount:          5,
 	}
 }

@@ -86,6 +86,7 @@ func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.Servic
 			clients.TaskSession,
 			clients.ECS,
 			registry,
+			cfg.AutoScale,
 		),
 	}
 }
