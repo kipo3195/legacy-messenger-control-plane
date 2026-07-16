@@ -3,11 +3,11 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/adapters/ssh"
 	"legacy-messenger-control-plane/internal/domain"
-	"log"
 	"net"
 	"strconv"
 	"time"
@@ -157,12 +157,15 @@ func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName stri
 		)
 	}
 
-	log.Printf(
-		"task session reports: serviceName=%s key=%s result=%v \n",
-		serviceName,
-		reportKey,
-		result,
-	)
+	// log.Printf(
+	// 	"[redis] task session reports: serviceName=%s key=%s\n",
+	// 	serviceName,
+	// 	reportKey,
+	// )
+	// report 출력
+	// for _, v := range result {
+	// 	log.Printf("[redis] report : %s\n", v)
+	// }
 
 	sessionReportMap := make(map[string]domain.SessionReport, 0)
 
@@ -182,7 +185,7 @@ func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName stri
 	return sessionReportMap, nil
 }
 
-func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName string) (map[string]string, error) {
+func (c *redisClient) GetInvalidReportTask(ctx context.Context, serviceName string) (map[string]string, []string, error) {
 
 	expiredKey := fmt.Sprintf(
 		"control-plane:session:{%s}:expires",
@@ -190,7 +193,8 @@ func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName stri
 	)
 
 	// 현재 시간보다 30초 이상 지난 score까지만 조회
-	expiredThreshold := time.Now().Add(-30 * time.Second).Unix()
+	now := time.Now()
+	expiredThreshold := now.Add(-30 * time.Second).Unix()
 
 	results, err := c.client.ZRangeByScoreWithScores(
 		ctx,
@@ -201,7 +205,7 @@ func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName stri
 		},
 	).Result()
 	if err != nil {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"failed to get expired report tasks: serviceName=%s: %w",
 			serviceName,
 			err,
@@ -213,7 +217,7 @@ func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName stri
 	for _, result := range results {
 		taskID, ok := result.Member.(string)
 		if !ok {
-			return nil, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"invalid expired task member type: serviceName=%s member=%v",
 				serviceName,
 				result.Member,
@@ -226,5 +230,110 @@ func (c *redisClient) GetExpiredReportTask(ctx context.Context, serviceName stri
 		)
 	}
 
-	return expiredTaskMap, nil
+	// 중지된 task 구하기
+	stopCandidate := now.Add(-60 * time.Second).Unix()
+
+	stopResults, err := c.client.ZRangeByScoreWithScores(
+		ctx,
+		expiredKey,
+		&goredis.ZRangeBy{
+			Min: "-inf",
+			Max: strconv.FormatInt(stopCandidate, 10),
+		},
+	).Result()
+	if err != nil {
+		return nil, nil, fmt.Errorf(
+			"failed to get expired report tasks: serviceName=%s: %w",
+			serviceName,
+			err,
+		)
+	}
+
+	stopTask := make([]string, len(stopResults))
+
+	for _, result := range stopResults {
+		taskID, ok := result.Member.(string)
+		if !ok {
+			return nil, nil, fmt.Errorf(
+				"invalid stop task member type: serviceName=%s member=%v",
+				serviceName,
+				result.Member,
+			)
+		}
+		stopTask = append(stopTask, taskID)
+	}
+
+	return expiredTaskMap, stopTask, nil
+}
+
+func (c *redisClient) ShouldStopTask(
+	ctx context.Context,
+	serviceName string,
+	taskID string,
+	now time.Time,
+) (bool, error) {
+	key := fmt.Sprintf(
+		"control-plane:session:{%s}:expires",
+		serviceName,
+	)
+
+	score, err := c.client.ZScore(ctx, key, taskID).Result()
+	if errors.Is(err, goredis.Nil) {
+		// 이미 삭제되었거나 아직 등록되지 않은 Task
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf(
+			"failed to get task expiration score: %w",
+			err,
+		)
+	}
+
+	const stopGracePeriod = 30 * time.Second
+
+	stopCutoff := now.
+		Add(-stopGracePeriod).
+		Unix()
+
+	return int64(score) <= stopCutoff, nil
+}
+
+func (c *redisClient) DeleteTaskSessionState(
+	ctx context.Context,
+	serviceName string,
+	taskID string,
+) error {
+	reportKey := fmt.Sprintf(
+		"control-plane:session:{%s}:reports",
+		serviceName,
+	)
+
+	expireKey := fmt.Sprintf(
+		"control-plane:session:{%s}:expires",
+		serviceName,
+	)
+
+	// expiredCountKey := fmt.Sprintf(
+	// 	"control-plane:session:{%s}:expired-counts",
+	// 	serviceName,
+	// )
+
+	_, err := c.client.TxPipelined(
+		ctx,
+		func(pipe goredis.Pipeliner) error {
+			pipe.HDel(ctx, reportKey, taskID)
+			pipe.ZRem(ctx, expireKey, taskID)
+			//	pipe.HDel(ctx, expiredCountKey, taskID)
+
+			return nil
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to delete task session state: %w",
+			err,
+		)
+	}
+
+	return nil
 }

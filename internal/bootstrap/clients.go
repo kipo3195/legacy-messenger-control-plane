@@ -28,8 +28,8 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 		ecsClient = fake.NewECSClient(
 			map[string]domain.ECSServiceControlState{
 				"ws-service": {
-					DesiredCount: 2,
-					RunningCount: 2,
+					DesiredCount: 1,
+					RunningCount: 1,
 					PendingCount: 0,
 				},
 			},

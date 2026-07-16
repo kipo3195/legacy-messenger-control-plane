@@ -3,10 +3,13 @@ package ports
 import (
 	"context"
 	"legacy-messenger-control-plane/internal/domain"
+	"time"
 )
 
 type TaskSessionPort interface {
 	SaveTaskSessionReport(ctx context.Context, report domain.TaskSessionReport) error
 	GetTaskSessionReport(ctx context.Context, serviceName string) (map[string]domain.SessionReport, error)
-	GetExpiredReportTask(ctx context.Context, serviceName string) (map[string]string, error)
+	GetInvalidReportTask(ctx context.Context, serviceName string) (map[string]string, []string, error)
+	ShouldStopTask(ctx context.Context, serviceName string, taskID string, now time.Time) (bool, error)
+	DeleteTaskSessionState(ctx context.Context, serviceName string, taskID string) error
 }

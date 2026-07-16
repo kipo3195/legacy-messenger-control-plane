@@ -56,5 +56,14 @@ func (s *SessionScalingScheduler) execute(ctx context.Context) {
 		)
 	}
 	// 이력관리 혹은 로깅
-	fmt.Println(result)
+	fmt.Println("")
+	fmt.Println("###############[AutoScaleResult]###############")
+	log.Println("")
+	fmt.Printf("Action : %s, Reason : %s \n", result.Action, result.Reason)
+	fmt.Printf("ECS Service Name : %s\n", result.ServiceName)
+	fmt.Printf("Total Session Count : %d\n", result.TotalSessionCount)
+	fmt.Printf("Current Desired Count : %d\n", result.CurrentDesiredCount)
+	fmt.Printf("Recommended Desired Count : %d\n", result.RecommendedDesiredCount)
+	fmt.Println("###############################################")
+	fmt.Println("")
 }

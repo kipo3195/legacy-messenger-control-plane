@@ -9,11 +9,20 @@ import (
 	"legacy-messenger-control-plane/internal/ports"
 )
 
+// 내부 메모리에 각 서비스 별 desired count까지 관리 할 수 있도록 함
+type UpdateDesiredCountCall struct {
+	ServiceName  string
+	DesiredCount int32
+}
+
 type ECSClient struct {
 	mu sync.RWMutex
 
 	serviceStates map[string]domain.ECSServiceControlState
 	redeployCount map[string]int
+
+	UpdateDesiredCountCalls []UpdateDesiredCountCall
+	UpdateDesiredCountErr   error
 }
 
 var _ ports.ECSPort = (*ECSClient)(nil)
@@ -21,7 +30,8 @@ var _ ports.ECSPort = (*ECSClient)(nil)
 func NewECSClient(
 	initialStates map[string]domain.ECSServiceControlState,
 ) *ECSClient {
-	states := make(map[string]domain.ECSServiceControlState)
+	// map 복사
+	states := make(map[string]domain.ECSServiceControlState, len(initialStates))
 
 	for serviceName, state := range initialStates {
 		states[serviceName] = state

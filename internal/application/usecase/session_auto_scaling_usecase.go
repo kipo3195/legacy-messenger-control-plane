@@ -6,7 +6,9 @@ import (
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
+	"log"
 	"math"
+	"time"
 )
 
 type sessionAutoScalingUsecase struct {
@@ -54,9 +56,10 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 	expiredTask := make([]string, 0)
 	normalTask := make([]string, 0)
 
-	// 1. 만료된 task조회
-	expiredReport, err := u.taskSessionPort.GetExpiredReportTask(ctx, serviceName)
+	// 1. 만료, 중지된 task조회
+	expiredReport, stopCandidates, err := u.taskSessionPort.GetInvalidReportTask(ctx, serviceName)
 	if err != nil {
+
 		return domain.SessionAutoScalingResult{}, fmt.Errorf("get task session report expired error")
 	}
 
@@ -67,21 +70,23 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 	}
 
 	// 3. report 결과를 순회하면서 유효와 만료 task 분리
-	for k, _ := range reported {
+	for k := range reported {
 		taskID := k
 		_, exists := expiredReport[taskID]
 		if exists {
 			expiredTask = append(expiredTask, taskID)
 			continue
 		}
+		// expired report task check
 		normalTask = append(normalTask, taskID)
 	}
 
 	// 유효, 만료 누락 로깅
-	fmt.Printf("expired task : %s, normal task : %s\n", expiredTask, normalTask)
-	if len(normalTask) == 0 {
-		return domain.SessionAutoScalingResult{}, fmt.Errorf("normalTask reports 0")
-	}
+	fmt.Printf("expired task : %s, normal task : %s,  stopCandidates :%v\n", expiredTask, normalTask, stopCandidates)
+
+	// if len(normalTask) == 0 {
+	// 	return domain.SessionAutoScalingResult{}, fmt.Errorf("normalTask reports 0")
+	// }
 
 	// 4. 정상 보고 report 커버리지 계산
 	totalSessionCount := calculateTotalSessionCount(reported, normalTask)
@@ -109,6 +114,9 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 		u.ecsCfg.ClusterName,
 		serviceDef.ECSServiceName,
 	)
+
+	//fmt.Printf("[ECS Status - before execute] status : %s desired : %d, running : %d, pending : %d\n", ecsState.Status, ecsState.DesiredCount, ecsState.RunningCount, ecsState.PendingCount)
+
 	if err != nil {
 		return domain.SessionAutoScalingResult{},
 			fmt.Errorf("failed to get ECS service control state: %w", err)
@@ -122,7 +130,7 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 		requiredTaskCount,
 	)
 
-	// 7. 판단 결과에 따라 실제 작업 수행
+	// 7. Auto Scaling 판단
 	result, err = u.applyScalingDecision(
 		ctx,
 		serviceDef.ECSServiceName,
@@ -135,6 +143,16 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 			err,
 		)
 	}
+
+	// 8. 1.에서 구한 stop candidate redis 점검 후 삭제 (추후 ECS에서 task 정보도 조회 하면 좋을 듯)
+	u.stopExpiredTasks(ctx, serviceName, stopCandidates)
+
+	ecsState, err = u.ecsPort.GetServiceControlState(
+		ctx,
+		u.ecsCfg.ClusterName,
+		serviceDef.ECSServiceName,
+	)
+	fmt.Printf("[ECS Status - after execute] status : %s desired : %d, running : %d, pending : %d\n", ecsState.Status, ecsState.DesiredCount, ecsState.RunningCount, ecsState.PendingCount)
 
 	return result, nil
 }
@@ -239,6 +257,7 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 
 	switch result.Action {
 	case domain.ScalingActionScaleOut:
+		log.Printf(">>>>>>> ecsServiceName : %s, scale out call... ", ecsServiceName)
 		updatedState, err := u.ecsPort.UpdateServiceDesiredCount(
 			ctx,
 			u.ecsCfg.ClusterName,
@@ -263,6 +282,7 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 		// Scale-in은 Task drain 절차가 필요하므로 여기서 실행하지 않는다.
 		result.Executed = false
 
+		log.Printf(">>>>>>> ecsServiceName : %s, scale in call... ", ecsServiceName)
 		// (scale in) 가장 적은수의 sessionCount를 갖는 task에 scale in 통보
 		// desiredCount만 변경한다고해서 선정한 Task가 종료된다고 보장되지 않습니다.
 		// ECS Service는 desiredCount를 유지하는 역할을 하며, Scale-in 시 어떤 Task가 종료될지는 ECS 스케줄러가 결정합니다.
@@ -295,4 +315,59 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 	}
 
 	return result, nil
+}
+
+func (u *sessionAutoScalingUsecase) stopExpiredTasks(
+	ctx context.Context,
+	serviceName string,
+	stopCandidates []string,
+) error {
+	now := time.Now()
+
+	for _, taskID := range stopCandidates {
+		shouldStop, err := u.taskSessionPort.ShouldStopTask(
+			ctx,
+			serviceName,
+			taskID,
+			now,
+		)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to recheck stop candidate: taskID=%s: %w",
+				taskID,
+				err,
+			)
+		}
+
+		// 후보 조회 이후 새로운 세션 보고가 들어온 경우
+		if !shouldStop {
+			continue
+		}
+
+		// if err := u.ecsPort.StopTask(
+		// 	ctx,
+		// 	taskID,
+		// 	"session report timeout",
+		// ); err != nil {
+		// 	return fmt.Errorf(
+		// 		"failed to stop task: taskID=%s: %w",
+		// 		taskID,
+		// 		err,
+		// 	)
+		// }
+
+		if err := u.taskSessionPort.DeleteTaskSessionState(
+			ctx,
+			serviceName,
+			taskID,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to delete task session state: taskID=%s: %w",
+				taskID,
+				err,
+			)
+		}
+	}
+
+	return nil
 }
