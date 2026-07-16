@@ -4,7 +4,7 @@ import (
 	"context"
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/adapters/aws"
-	"legacy-messenger-control-plane/internal/adapters/mock"
+	"legacy-messenger-control-plane/internal/adapters/fake"
 	"legacy-messenger-control-plane/internal/adapters/redis"
 	"legacy-messenger-control-plane/internal/adapters/ssh"
 	"legacy-messenger-control-plane/internal/domain"
@@ -12,28 +12,35 @@ import (
 )
 
 type Clients struct {
-	ECS            ports.ECSPort
-	AutoScalingECS ports.SessionAutoScalingECSPort // mock
-	CloudWatch     ports.CloudWatchPort
-	ELB            ports.ELBPort
-	TaskSession    ports.TaskSessionPort
+	ECS         ports.ECSPort
+	CloudWatch  ports.CloudWatchPort
+	ELB         ports.ELBPort
+	TaskSession ports.TaskSessionPort
 
 	closeRedis func() error
 }
 
 func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
-	ecsClient, err := aws.NewECSClient(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
 
-	mockECSClient := mock.NewSessionAutoScalingECSClient(
-		domain.ECSServiceControlState{
-			DesiredCount: 5,
-			RunningCount: 2,
-			PendingCount: 0,
-		},
-	)
+	var ecsClient ports.ECSPort
+
+	if cfg.Mock {
+		ecsClient = fake.NewECSClient(
+			map[string]domain.ECSServiceControlState{
+				"ws-service": {
+					DesiredCount: 2,
+					RunningCount: 2,
+					PendingCount: 0,
+				},
+			},
+		)
+	} else {
+		client, err := aws.NewECSClient(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		ecsClient = client
+	}
 
 	cloudWatchClient, err := aws.NewCloudWatchClient(ctx, cfg.AWS.Region)
 	if err != nil {
@@ -53,12 +60,11 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 	}
 
 	return &Clients{
-		ECS:            ecsClient,
-		AutoScalingECS: mockECSClient,
-		CloudWatch:     cloudWatchClient,
-		ELB:            elbClient,
-		TaskSession:    taskSessionClient,
-		closeRedis:     taskSessionClient.Close,
+		ECS:         ecsClient,
+		CloudWatch:  cloudWatchClient,
+		ELB:         elbClient,
+		TaskSession: taskSessionClient,
+		closeRedis:  taskSessionClient.Close,
 	}, nil
 }
 

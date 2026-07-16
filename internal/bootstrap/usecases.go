@@ -84,7 +84,7 @@ func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.Servic
 
 		AutoScale: usecase.NewSessionAutoScalingUsecase(
 			clients.TaskSession,
-			clients.AutoScalingECS,
+			clients.ECS,
 			registry,
 			cfg.ECS,
 			cfg.AutoScale,

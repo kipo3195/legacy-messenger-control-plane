@@ -1,6 +1,6 @@
 services:
   ws:
-    ecsServiceName: xxxxxx-ws-service
+    ecsServiceName: ws-service
     displayName: WebSocket Service
     scalable: true
     minCount: 0

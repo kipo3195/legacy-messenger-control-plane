@@ -11,11 +11,10 @@ import (
 
 type sessionAutoScalingUsecase struct {
 	taskSessionPort ports.TaskSessionPort
-	// ecsPort         ports.ECSPort AWS 연결용
-	ecsPort   ports.SessionAutoScalingECSPort // Mock
-	registry  *configs.ServiceRegistry
-	autoScale *configs.AutoScaleConfig
-	ecsCfg    *configs.ECSConfig
+	ecsPort         ports.ECSPort
+	registry        *configs.ServiceRegistry
+	autoScale       *configs.AutoScaleConfig
+	ecsCfg          *configs.ECSConfig
 }
 
 type SessionAutoScalingUsecase interface {
@@ -24,8 +23,7 @@ type SessionAutoScalingUsecase interface {
 
 func NewSessionAutoScalingUsecase(
 	taskSessionPort ports.TaskSessionPort,
-	// ecsPort ports.ECSPort,
-	ecsPort ports.SessionAutoScalingECSPort,
+	ecsPort ports.ECSPort,
 	registry *configs.ServiceRegistry,
 	ecsCfg *configs.ECSConfig,
 	autoScale *configs.AutoScaleConfig,
@@ -81,6 +79,9 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 
 	// 유효, 만료 누락 로깅
 	fmt.Printf("expired task : %s, normal task : %s\n", expiredTask, normalTask)
+	if len(normalTask) == 0 {
+		return domain.SessionAutoScalingResult{}, fmt.Errorf("normalTask reports 0")
+	}
 
 	// 4. 정상 보고 report 커버리지 계산
 	totalSessionCount := calculateTotalSessionCount(reported, normalTask)

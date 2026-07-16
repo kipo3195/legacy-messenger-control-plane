@@ -55,6 +55,7 @@ func Load() (*Config, error) {
 	ssh, err := initSsh()
 	redis, err := initRedis()
 	scaling := initScaling()
+	mock := initMock()
 
 	if err != nil {
 		return nil, err
@@ -68,6 +69,7 @@ func Load() (*Config, error) {
 		SSH:             ssh,
 		Redis:           redis,
 		AutoScale:       scaling,
+		Mock:            mock,
 	}, nil
 }
 
@@ -186,4 +188,8 @@ func initScaling() *AutoScaleConfig {
 		MinTaskCount:          1,
 		MaxTaskCount:          5,
 	}
+}
+
+func initMock() bool {
+	return true
 }
