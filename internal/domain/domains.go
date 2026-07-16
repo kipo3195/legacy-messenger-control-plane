@@ -78,8 +78,9 @@ type SessionAutoScalingResult = sca.SessionAutoScalingResult
 type SessionReport = sca.SessionReport
 
 const (
-	ScalingActionScaleOut    = se.ScalingActionScaleOut
-	ScalingActionScaleIn     = se.ScalingActionScaleIn
-	ScalingActionKeep        = se.ScalingActionKeep
-	ScalingActionNotScalable = se.ScalingActionNotScalable
+	ScalingActionScaleOut       = se.ScalingActionScaleOut
+	ScalingActionScaleIn        = se.ScalingActionScaleIn
+	ScalingActionKeep           = se.ScalingActionKeep
+	ScalingActionNotScalable    = se.ScalingActionNotScalable
+	ScaleActionScaleInCandidate = se.ScalingActionScaleInCandidate
 )

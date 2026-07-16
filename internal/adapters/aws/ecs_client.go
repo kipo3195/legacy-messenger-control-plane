@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
 
@@ -22,21 +23,21 @@ type ECSClient struct {
 	client *ecs.Client
 }
 
-func NewECSClient(ctx context.Context, region string) (*ECSClient, error) {
-	if region == "" {
+func NewECSClient(ctx context.Context, cfg *configs.Config) (*ECSClient, error) {
+	if cfg.AWS.Region == "" {
 		return nil, fmt.Errorf("aws region is required")
 	}
 
-	cfg, err := awsconfig.LoadDefaultConfig(
+	awsCfg, err := awsconfig.LoadDefaultConfig(
 		ctx,
-		awsconfig.WithRegion(region),
+		awsconfig.WithRegion(cfg.AWS.Region),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load aws config: %w", err)
 	}
 
 	return &ECSClient{
-		client: ecs.NewFromConfig(cfg),
+		client: ecs.NewFromConfig(awsCfg),
 	}, nil
 }
 

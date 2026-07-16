@@ -4,25 +4,36 @@ import (
 	"context"
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/adapters/aws"
+	"legacy-messenger-control-plane/internal/adapters/mock"
 	"legacy-messenger-control-plane/internal/adapters/redis"
 	"legacy-messenger-control-plane/internal/adapters/ssh"
+	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
 )
 
 type Clients struct {
-	ECS         ports.ECSPort
-	CloudWatch  ports.CloudWatchPort
-	ELB         ports.ELBPort
-	TaskSession ports.TaskSessionPort
+	ECS            ports.ECSPort
+	AutoScalingECS ports.SessionAutoScalingECSPort // mock
+	CloudWatch     ports.CloudWatchPort
+	ELB            ports.ELBPort
+	TaskSession    ports.TaskSessionPort
 
 	closeRedis func() error
 }
 
 func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
-	ecsClient, err := aws.NewECSClient(ctx, cfg.AWS.Region)
+	ecsClient, err := aws.NewECSClient(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
+
+	mockECSClient := mock.NewSessionAutoScalingECSClient(
+		domain.ECSServiceControlState{
+			DesiredCount: 5,
+			RunningCount: 2,
+			PendingCount: 0,
+		},
+	)
 
 	cloudWatchClient, err := aws.NewCloudWatchClient(ctx, cfg.AWS.Region)
 	if err != nil {
@@ -42,11 +53,12 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 	}
 
 	return &Clients{
-		ECS:         ecsClient,
-		CloudWatch:  cloudWatchClient,
-		ELB:         elbClient,
-		TaskSession: taskSessionClient,
-		closeRedis:  taskSessionClient.Close,
+		ECS:            ecsClient,
+		AutoScalingECS: mockECSClient,
+		CloudWatch:     cloudWatchClient,
+		ELB:            elbClient,
+		TaskSession:    taskSessionClient,
+		closeRedis:     taskSessionClient.Close,
 	}, nil
 }
 

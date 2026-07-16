@@ -3,10 +3,11 @@ package serviceevaluation
 type ScalingAction string
 
 const (
-	ScalingActionScaleOut    ScalingAction = "SCALE_OUT"
-	ScalingActionScaleIn     ScalingAction = "SCALE_IN"
-	ScalingActionKeep        ScalingAction = "KEEP"
-	ScalingActionNotScalable ScalingAction = "NOT_SCALABLE"
+	ScalingActionScaleOut         ScalingAction = "SCALE_OUT"
+	ScalingActionScaleIn          ScalingAction = "SCALE_IN"
+	ScalingActionScaleInCandidate ScalingAction = "SCALE_IN_CANDIDATE"
+	ScalingActionKeep             ScalingAction = "KEEP"
+	ScalingActionNotScalable      ScalingAction = "NOT_SCALABLE"
 )
 
 type ScalingEvaluation struct {

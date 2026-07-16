@@ -16,6 +16,7 @@ type Config struct {
 	SSH             *SSHConfig
 	Redis           *RedisConfig
 	AutoScale       *AutoScaleConfig
+	Mock            bool
 }
 
 type ServerConfig struct {
