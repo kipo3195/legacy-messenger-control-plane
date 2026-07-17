@@ -19,5 +19,4 @@ func main() {
 	if err := app.Router.Run(addr); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
-
 }

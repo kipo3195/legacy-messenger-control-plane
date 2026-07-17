@@ -8,6 +8,7 @@ import (
 	"legacy-messenger-control-plane/internal/ports"
 	"log"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -17,6 +18,7 @@ type sessionAutoScalingUsecase struct {
 	registry        *configs.ServiceRegistry
 	autoScale       *configs.AutoScaleConfig
 	ecsCfg          *configs.ECSConfig
+	scalingPolicy   *ScalingPolicy
 }
 
 type SessionAutoScalingUsecase interface {
@@ -36,6 +38,7 @@ func NewSessionAutoScalingUsecase(
 		registry:        registry,
 		ecsCfg:          ecsCfg,
 		autoScale:       autoScale,
+		scalingPolicy:   NewScalingPolicy(),
 	}
 }
 
@@ -80,26 +83,28 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 		// expired report task check
 		normalTask = append(normalTask, taskID)
 	}
-
+	fmt.Println("##############[TaskReportAnalysis]#############")
+	log.Println("")
 	// 유효, 만료 누락 로깅
-	fmt.Printf("expired task : %s, normal task : %s,  stopCandidates :%v\n", expiredTask, normalTask, stopCandidates)
+	fmt.Printf("Expired task : %s, Normal task : %s \n", expiredTask, normalTask)
+	fmt.Printf("StopCandidates :%v\n", stopCandidates)
 
 	// if len(normalTask) == 0 {
 	// 	return domain.SessionAutoScalingResult{}, fmt.Errorf("normalTask reports 0")
 	// }
 
 	// 4. 정상 보고 report 커버리지 계산
-	totalSessionCount := calculateTotalSessionCount(reported, normalTask)
+	taskSessionInfo := calculateTotalSessionCount(reported, normalTask)
 
 	requiredTaskCount := calculateRequiredTaskCount(
-		totalSessionCount,
+		taskSessionInfo.TotalSessionCount,
 		u.autoScale.TargetSessionsPerTask,
 		u.autoScale.TargetUtilization,
 		u.autoScale.MinTaskCount,
 		u.autoScale.MaxTaskCount,
 	)
 
-	fmt.Printf("totalSessionCount : %d, desiredCount : %d\n", totalSessionCount, requiredTaskCount)
+	//fmt.Printf("totalSessionCount : %d, desiredCount : %d\n", totalSessionCount, requiredTaskCount)
 
 	// 5. Redis report와 ECS Task 비교
 	// yaml 파일의 서비스 정의 조회
@@ -122,29 +127,45 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 			fmt.Errorf("failed to get ECS service control state: %w", err)
 	}
 
-	// 6. 현재 desiredCount와 필요한 Task 수를 비교하여 스케일링 판단
-	result := evaluateScaling(
+	// 6. 현재 desiredCount와 필요한 Task 수를 비교
+	demendResult := evaluateScalingDemand(
 		serviceName,
-		totalSessionCount,
+		taskSessionInfo,
 		int(ecsState.DesiredCount),
 		requiredTaskCount,
 	)
 
-	// 7. Auto Scaling 판단
-	result, err = u.applyScalingDecision(
-		ctx,
-		serviceDef.ECSServiceName,
-		result,
+	var result domain.SessionAutoScalingResult
+
+	// 7. 정책 평가
+	policyDecision, approved := u.scalingPolicy.Evaluate(
+		demendResult,
+		ecsState,
+		taskSessionInfo.ReportCoverage,
+		time.Now(),
 	)
-	if err != nil {
-		return domain.SessionAutoScalingResult{}, fmt.Errorf(
-			"failed to apply scaling decision: serviceName=%s: %w",
-			serviceName,
-			err,
+
+	if !approved {
+		result = policyDecision
+	} else {
+		// 8. Auto Scaling 실행
+		result, err = u.applyScalingDecision(
+			ctx,
+			serviceDef.ECSServiceName,
+			taskSessionInfo,
+			policyDecision,
 		)
+
+		if err != nil {
+			return domain.SessionAutoScalingResult{}, fmt.Errorf(
+				"failed to apply scaling decision: serviceName=%s: %w",
+				serviceName,
+				err,
+			)
+		}
 	}
 
-	// 8. 1.에서 구한 stop candidate redis 점검 후 삭제 (추후 ECS에서 task 정보도 조회 하면 좋을 듯)
+	// 9. 1.에서 구한 stop candidate redis 점검 후 삭제 (추후 ECS에서 task 정보도 조회 하면 좋을 듯)
 	u.stopExpiredTasks(ctx, serviceName, stopCandidates)
 
 	ecsState, err = u.ecsPort.GetServiceControlState(
@@ -152,23 +173,57 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 		u.ecsCfg.ClusterName,
 		serviceDef.ECSServiceName,
 	)
-	fmt.Printf("[ECS Status - after execute] status : %s desired : %d, running : %d, pending : %d\n", ecsState.Status, ecsState.DesiredCount, ecsState.RunningCount, ecsState.PendingCount)
+	//fmt.Printf("[ECS Status - after execute] status : %s desired : %d, running : %d, pending : %d\n", ecsState.Status, ecsState.DesiredCount, ecsState.RunningCount, ecsState.PendingCount)
+	fmt.Println("###############################################")
 
 	return result, nil
 }
 
-func calculateTotalSessionCount(reported map[string]domain.SessionReport, normalTask []string) int {
+func calculateTotalSessionCount(
+	reported map[string]domain.SessionReport,
+	normalTask []string,
+) domain.TaskSessionInfo {
 
-	var totalCount int
+	totalCount := 0
 
-	for _, k := range normalTask {
-		report, exists := reported[k]
-		if exists {
-			totalCount += report.SessionCount
+	taskSessionCounts := make([]domain.TaskInfo, 0, len(normalTask))
+
+	for _, taskID := range normalTask {
+		report, exists := reported[taskID]
+		if !exists {
+			continue
 		}
+
+		totalCount += report.SessionCount
+
+		taskSessionCounts = append(taskSessionCounts, domain.TaskInfo{
+			TaskID:       taskID,
+			SessionCount: report.SessionCount,
+		})
 	}
 
-	return totalCount
+	var reportCoverage float64
+	if len(normalTask) != 0 {
+		reportCoverage = float64(reportCoverage) / float64(len(reported))
+	}
+
+	// SessionCount가 적은 순서로 오름차순 정렬
+	sort.Slice(taskSessionCounts, func(i, j int) bool {
+		return taskSessionCounts[i].SessionCount <
+			taskSessionCounts[j].SessionCount
+	})
+
+	avgSessionCount := 0
+	if len(taskSessionCounts) > 0 {
+		avgSessionCount = totalCount / len(taskSessionCounts)
+	}
+
+	return domain.TaskSessionInfo{
+		TotalSessionCount: totalCount,
+		AvgSessionCount:   avgSessionCount,
+		TaskSessionCount:  taskSessionCounts,
+		ReportCoverage:    reportCoverage,
+	}
 }
 
 func calculateRequiredTaskCount(
@@ -206,12 +261,15 @@ func calculateRequiredTaskCount(
 	return requiredCount
 }
 
-func evaluateScaling(
+// 세션 수치 비교
+func evaluateScalingDemand(
 	serviceName string,
-	totalSessionCount int,
+	taskSessionInfo domain.TaskSessionInfo,
 	currentDesiredCount int,
 	requiredTaskCount int,
 ) domain.SessionAutoScalingResult {
+
+	totalSessionCount := taskSessionInfo.TotalSessionCount
 
 	switch {
 	case requiredTaskCount > currentDesiredCount:
@@ -233,7 +291,7 @@ func evaluateScaling(
 			RecommendedDesiredCount: requiredTaskCount,
 			Action:                  domain.ScalingActionScaleIn,
 			Executed:                false,
-			Reason:                  "scale-in requires task drain",
+			Reason:                  "required task count is below current desired count",
 		}
 
 	default:
@@ -252,12 +310,12 @@ func evaluateScaling(
 func (u *sessionAutoScalingUsecase) applyScalingDecision(
 	ctx context.Context,
 	ecsServiceName string,
+	taskSessionInfo domain.TaskSessionInfo,
 	result domain.SessionAutoScalingResult,
 ) (domain.SessionAutoScalingResult, error) {
-
 	switch result.Action {
 	case domain.ScalingActionScaleOut:
-		log.Printf(">>>>>>> ecsServiceName : %s, scale out call... ", ecsServiceName)
+		fmt.Printf(">>>>>>> ecsServiceName : %s, scale out call... ", ecsServiceName)
 		updatedState, err := u.ecsPort.UpdateServiceDesiredCount(
 			ctx,
 			u.ecsCfg.ClusterName,
@@ -279,15 +337,21 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 		result.ECSState = updatedState
 
 	case domain.ScalingActionScaleIn:
+		fmt.Printf(">>>>>>> ecsServiceName : %s, scale in call.. \n", ecsServiceName)
 		// Scale-in은 Task drain 절차가 필요하므로 여기서 실행하지 않는다.
 		result.Executed = false
 
-		log.Printf(">>>>>>> ecsServiceName : %s, scale in call... ", ecsServiceName)
 		// (scale in) 가장 적은수의 sessionCount를 갖는 task에 scale in 통보
 		// desiredCount만 변경한다고해서 선정한 Task가 종료된다고 보장되지 않습니다.
 		// ECS Service는 desiredCount를 유지하는 역할을 하며, Scale-in 시 어떤 Task가 종료될지는 ECS 스케줄러가 결정합니다.
 		// 또한 Service Task를 직접 중지해도 desiredCount가 그대로라면 ECS는 대체 Task를 시작됩니다.
 		// 그러므로 Task draining 절차를 통해 안전하게 Scale-in 필요.
+		current := result.CurrentDesiredCount
+		recommended := result.RecommendedDesiredCount
+		for i := 0; i < current-recommended; i++ {
+			taskSession := taskSessionInfo.TaskSessionCount[i]
+			fmt.Printf(">>>>>>>[scale in]>>>>>>>>> target task : %s, session count :%d drain call.. \n", taskSession.TaskID, taskSession.SessionCount)
+		}
 
 		// [Task Drain 프로세스]
 		// a. Scale-in 대상 Task 선정
@@ -355,7 +419,6 @@ func (u *sessionAutoScalingUsecase) stopExpiredTasks(
 		// 		err,
 		// 	)
 		// }
-
 		if err := u.taskSessionPort.DeleteTaskSessionState(
 			ctx,
 			serviceName,
@@ -370,4 +433,28 @@ func (u *sessionAutoScalingUsecase) stopExpiredTasks(
 	}
 
 	return nil
+}
+
+type ScalingPolicyConfig struct {
+	MinDesiredCount int
+	MaxDesiredCount int
+
+	ScaleOutConsecutiveCount int
+	ScaleInConsecutiveCount  int
+
+	ScaleOutCooldown time.Duration
+	ScaleInCooldown  time.Duration
+
+	MaxScaleOutStep int
+	MaxScaleInStep  int
+
+	MinReportCoverage float64
+}
+
+type ScalingEvaluation struct {
+	Demand domain.SessionAutoScalingResult
+
+	ECSState       domain.ECSServiceControlState
+	ReportCoverage float64
+	EvaluatedAt    time.Time
 }

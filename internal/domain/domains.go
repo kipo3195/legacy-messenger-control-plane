@@ -76,6 +76,8 @@ type ScalingRecommendationStatus = se.ScalingRecommendationStatus
 // scale
 type SessionAutoScalingResult = sca.SessionAutoScalingResult
 type SessionReport = sca.SessionReport
+type TaskSessionInfo = sca.TaskSessionInfo
+type TaskInfo = sca.TaskInfo
 
 const (
 	ScalingActionScaleOut       = se.ScalingActionScaleOut
