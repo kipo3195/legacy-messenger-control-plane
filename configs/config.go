@@ -54,7 +54,7 @@ func Load() (*Config, error) {
 	serviceRegistry := initServiceRegistry()
 	ssh, err := initSsh()
 	redis, err := initRedis()
-	scaling := initScaling()
+	autoScaling := initAuthScaling()
 	mock := initMock()
 
 	if err != nil {
@@ -68,7 +68,7 @@ func Load() (*Config, error) {
 		ServiceRegistry: serviceRegistry,
 		SSH:             ssh,
 		Redis:           redis,
-		AutoScale:       scaling,
+		AutoScale:       autoScaling,
 		Mock:            mock,
 	}, nil
 }
@@ -160,14 +160,16 @@ func initSsh() (*SSHConfig, error) {
 }
 
 type AutoScaleConfig struct {
-	Interval              int
-	TargetSessionsPerTask int     // task당 추구하는 session의 수
-	TargetUtilization     float64 // 대응해야하는 비율
-	MinTaskCount          int     // 최소 task 수
-	MaxTaskCount          int     // 최대 task 수
+	Interval            int
+	SessionPerTask      int     // taske당 최대 session의 수
+	ScaleOutUtilization float64 // scale out 대응해야하는 비율
+	ExpiresPeriod       int     // 만료
+	StopCandidatePeriod int
+	MinTaskCount        int // 최소 task 수
+	MaxTaskCount        int // 최대 task 수
 }
 
-func initScaling() *AutoScaleConfig {
+func initAuthScaling() *AutoScaleConfig {
 	intervalStr := os.Getenv("AUTO_SCALE_INTERVAL")
 
 	interval, err := strconv.Atoi(intervalStr)
@@ -175,18 +177,20 @@ func initScaling() *AutoScaleConfig {
 		interval = 10
 	}
 
-	targetSessionsPerTaskStr := os.Getenv("AUTO_SCALE_TARGET_SESSION_PER_TASK")
-	targetSessionsPerTask, err := strconv.Atoi(targetSessionsPerTaskStr)
+	sessionPerTaskStr := os.Getenv("AUTO_SCALE_SESSION_PER_TASK")
+	sessionPerTask, err := strconv.Atoi(sessionPerTaskStr)
 	if err != nil {
-		targetSessionsPerTask = 1500
+		sessionPerTask = 1500
 	}
 
 	return &AutoScaleConfig{
-		Interval:              interval,
-		TargetSessionsPerTask: targetSessionsPerTask,
-		TargetUtilization:     0.8,
-		MinTaskCount:          1,
-		MaxTaskCount:          5,
+		Interval:            interval,
+		SessionPerTask:      sessionPerTask,
+		ScaleOutUtilization: 0.8,
+		ExpiresPeriod:       30,
+		StopCandidatePeriod: 60,
+		MinTaskCount:        1,
+		MaxTaskCount:        5,
 	}
 }
 

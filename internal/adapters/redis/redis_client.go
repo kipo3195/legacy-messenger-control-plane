@@ -185,7 +185,7 @@ func (c *redisClient) GetTaskSessionReport(ctx context.Context, serviceName stri
 	return sessionReportMap, nil
 }
 
-func (c *redisClient) GetInvalidReportTask(ctx context.Context, serviceName string) (map[string]string, []string, error) {
+func (c *redisClient) GetInvalidReportTask(ctx context.Context, serviceName string, cfg *configs.AutoScaleConfig) (map[string]string, []string, error) {
 
 	expiredKey := fmt.Sprintf(
 		"control-plane:session:{%s}:expires",
@@ -194,7 +194,7 @@ func (c *redisClient) GetInvalidReportTask(ctx context.Context, serviceName stri
 
 	// 현재 시간보다 30초 이상 지난 score까지만 조회
 	now := time.Now()
-	expiredThreshold := now.Add(-30 * time.Second).Unix()
+	expiredThreshold := now.Add(-time.Duration(cfg.ExpiresPeriod) * time.Second).Unix()
 
 	results, err := c.client.ZRangeByScoreWithScores(
 		ctx,
@@ -229,9 +229,12 @@ func (c *redisClient) GetInvalidReportTask(ctx context.Context, serviceName stri
 			10,
 		)
 	}
+	if len(expiredTaskMap) > 0 {
+		fmt.Printf("[expiredTaskMap] %v\n", expiredTaskMap)
+	}
 
 	// 중지된 task 구하기
-	stopCandidate := now.Add(-60 * time.Second).Unix()
+	stopCandidate := now.Add(-time.Duration(cfg.StopCandidatePeriod) * time.Second).Unix()
 
 	stopResults, err := c.client.ZRangeByScoreWithScores(
 		ctx,
@@ -261,6 +264,9 @@ func (c *redisClient) GetInvalidReportTask(ctx context.Context, serviceName stri
 			)
 		}
 		stopTask = append(stopTask, taskID)
+	}
+	if len(stopTask) > 0 {
+		fmt.Printf("[stopTask] %v\n", stopTask)
 	}
 
 	return expiredTaskMap, stopTask, nil

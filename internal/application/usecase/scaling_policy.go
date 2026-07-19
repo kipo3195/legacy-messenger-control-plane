@@ -44,7 +44,7 @@ func NewScalingPolicy() *ScalingPolicy {
 		maxScaleOutStep: 2,
 		maxScaleInStep:  1,
 
-		scaleOutConsecutiveCount: 2,
+		scaleOutConsecutiveCount: 3,
 		scaleInConsecutiveCount:  5,
 
 		scaleOutCooldown: 30 * time.Second,
@@ -222,6 +222,7 @@ func (p *ScalingPolicy) evaluateScaleIn(
 		return result, false
 	}
 
+	// pending 상태가 있으면 판단 횟수 초기화, pending으로 인한 종료
 	if ecsState.PendingCount > 0 {
 		p.scaleInStreak[serviceName] = 0
 

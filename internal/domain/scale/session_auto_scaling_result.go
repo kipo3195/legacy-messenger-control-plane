@@ -8,6 +8,7 @@ type SessionAutoScalingResult struct {
 	ServiceName string `json:"serviceName"`
 
 	TotalSessionCount       int `json:"totalSessionCount"`
+	RunningTaskCount        int `json:"runningTaskCount"`
 	CurrentDesiredCount     int `json:"currentDesiredCount"`
 	RecommendedDesiredCount int `json:"recommendedDesiredCount"`
 

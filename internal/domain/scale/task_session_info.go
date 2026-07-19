@@ -1,7 +1,7 @@
 package scale
 
 type TaskSessionInfo struct {
-	TaskSessionCount []TaskInfo
+	SessionCountPerTask []TaskInfo
 
 	AvgSessionCount int
 

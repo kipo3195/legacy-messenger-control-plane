@@ -55,15 +55,15 @@ func (s *SessionScalingScheduler) execute(ctx context.Context) {
 			err,
 		)
 	}
-	// 이력관리 혹은 로깅
-	fmt.Println("")
-	fmt.Println("###############[AutoScaleResult]###############")
+	fmt.Println("########################## Scaling Monitoring Result ##########################")
 	log.Println("")
-	fmt.Printf("Action : %s, Reason : %s \n", result.Action, result.Reason)
-	fmt.Printf("ECS Service Name : %s\n", result.ServiceName)
-	fmt.Printf("Total Session Count : %d\n", result.TotalSessionCount)
-	fmt.Printf("Current Desired Count : %d\n", result.CurrentDesiredCount)
-	fmt.Printf("Recommended Desired Count : %d\n", result.RecommendedDesiredCount)
-	fmt.Println("###############################################")
-	fmt.Println("")
+	fmt.Println("ServiceName : ", result.ServiceName)
+	fmt.Println("TotalSessionCount : ", result.TotalSessionCount)
+	fmt.Println("RunningTaskCount : ", result.RunningTaskCount)
+	fmt.Println("CurrentDesiredCount : ", result.CurrentDesiredCount)
+	fmt.Println("RecommendedDesiredCount : ", result.RecommendedDesiredCount)
+	fmt.Println("Action : ", result.Action)
+	fmt.Println("Reason : ", result.Reason)
+	fmt.Println("##############################################################################")
+
 }
