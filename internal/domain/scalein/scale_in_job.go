@@ -1,0 +1,22 @@
+package scalein
+
+import "time"
+
+type ScaleInJob struct {
+	ServiceName    string
+	ECSServiceName string
+
+	Status ScaleInStatus
+
+	TargetTaskID string
+
+	CurrentDesiredCount int
+	TargetDesiredCount  int
+
+	ZeroSessionStreak int
+
+	RequestedAt time.Time
+	UpdatedAt   time.Time
+
+	LastError string
+}

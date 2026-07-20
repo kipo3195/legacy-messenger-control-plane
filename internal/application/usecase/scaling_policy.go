@@ -75,6 +75,28 @@ func (p *ScalingPolicy) Evaluate(
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// 유지 판단이면 ECS 수렴 여부와 무관하게 실행할 것이 없음
+	if result.Action == domain.ScalingActionKeep {
+		p.resetStreak(result.ServiceName)
+		result.Executed = false
+		result.Reason = "scaling is not required"
+
+		return result, false
+	}
+
+	// 수렴 여부 파악
+	if !isECSConverged(ecsState) {
+		result.Action = domain.ScaleActionSkip
+		result.Executed = false
+		result.Reason = fmt.Sprintf(
+			"ecs service is not converged: desired=%d running=%d pending=%d",
+			ecsState.DesiredCount,
+			ecsState.RunningCount,
+			ecsState.PendingCount,
+		)
+		return result, false
+	}
+
 	switch result.Action {
 	case domain.ScalingActionScaleOut:
 		return p.evaluateScaleOut(
@@ -90,22 +112,6 @@ func (p *ScalingPolicy) Evaluate(
 			reportCoverage,
 			now,
 		)
-
-	case domain.ScalingActionKeep:
-		p.resetStreak(result.ServiceName)
-
-		result.Executed = false
-		result.Reason = "current desired count is appropriate"
-
-		return result, false
-
-	case domain.ScalingActionNotScalable:
-		p.resetStreak(result.ServiceName)
-
-		result.Executed = false
-		result.Reason = "service is not scalable"
-
-		return result, false
 
 	default:
 		p.resetStreak(result.ServiceName)
@@ -203,6 +209,17 @@ func (p *ScalingPolicy) evaluateScaleOut(
 	return result, true
 }
 
+func isECSConverged(
+	state domain.ECSServiceControlState) bool {
+	// desired running pending
+	//.  3.      3.      0.  -> OK
+	//.  3.      2.      1   -> Scale out
+	//.  2.      3.      0.  -> Scale in
+	//.  3.      2.      0.  -> 비정상
+	return state.PendingCount == 0 &&
+		state.RunningCount == state.DesiredCount
+}
+
 func (p *ScalingPolicy) evaluateScaleIn(
 	result domain.SessionAutoScalingResult,
 	ecsState domain.ECSServiceControlState,
@@ -248,9 +265,12 @@ func (p *ScalingPolicy) evaluateScaleIn(
 	// Scale-out 직후에는 세션 재분배 시간을 확보한다.
 	lastScaleOutAt := p.lastScaleOutAt[serviceName]
 
+	// 마지막 scale out 시간을 기준으로 계산
 	if !lastScaleOutAt.IsZero() &&
+		// 현재 시각 - 마지막 Scale-out시간이 설정된 Cooldown보다 짧은 경우
 		now.Sub(lastScaleOutAt) < p.scaleInCooldown {
 
+		// Scale-out 승인 거절
 		p.scaleInStreak[serviceName] = 0
 
 		remaining := p.scaleInCooldown - now.Sub(lastScaleOutAt)

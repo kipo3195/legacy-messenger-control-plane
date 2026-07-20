@@ -3,6 +3,7 @@ package domain
 import (
 	cp "legacy-messenger-control-plane/internal/domain/connectionpressure"
 	sca "legacy-messenger-control-plane/internal/domain/scale"
+	si "legacy-messenger-control-plane/internal/domain/scalein"
 	svc "legacy-messenger-control-plane/internal/domain/service"
 	sc "legacy-messenger-control-plane/internal/domain/servicecontrol"
 	se "legacy-messenger-control-plane/internal/domain/serviceevaluation"
@@ -83,6 +84,19 @@ const (
 	ScalingActionScaleOut       = se.ScalingActionScaleOut
 	ScalingActionScaleIn        = se.ScalingActionScaleIn
 	ScalingActionKeep           = se.ScalingActionKeep
+	ScaleActionSkip             = se.ScaleActionSkip
 	ScalingActionNotScalable    = se.ScalingActionNotScalable
 	ScaleActionScaleInCandidate = se.ScalingActionScaleInCandidate
+)
+
+// scale in
+type ScaleInJob = si.ScaleInJob
+type ScaleInStatus = si.ScaleInStatus
+
+const (
+	ScaleInStatusRequested = si.ScaleInStatusRequested
+	ScaleInStatusDraining  = si.ScaleInStatusDraining
+	ScaleInStatusApplied   = si.ScaleInStatusApplied
+	ScaleInStatusCompleted = si.ScaleInStatusCompleted
+	ScaleInStatusFailed    = si.ScaleInStatusFailed
 )

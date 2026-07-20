@@ -30,6 +30,7 @@ func NewSessionAutoScalingUsecase(
 	registry *configs.ServiceRegistry,
 	ecsCfg *configs.ECSConfig,
 	autoScale *configs.AutoScaleConfig,
+	scalingPolicy *ScalingPolicy,
 ) SessionAutoScalingUsecase {
 	return &sessionAutoScalingUsecase{
 		taskSessionPort: taskSessionPort,
@@ -37,7 +38,7 @@ func NewSessionAutoScalingUsecase(
 		registry:        registry,
 		ecsCfg:          ecsCfg,
 		autoScale:       autoScale,
-		scalingPolicy:   NewScalingPolicy(),
+		scalingPolicy:   scalingPolicy,
 	}
 }
 
@@ -116,7 +117,7 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 
 	var result domain.SessionAutoScalingResult
 
-	// 9. 정책 평가
+	// 9. 정책 평가 + 수렴 여부 (직전의 요청이 처리되었는지)
 	policyDecision, scalingApproved := u.scalingPolicy.Evaluate(
 		demendResult,
 		ecsState,
@@ -139,6 +140,26 @@ func (u *sessionAutoScalingUsecase) EvaluateAndScale(ctx context.Context, servic
 				"failed to apply scaling decision: serviceName=%s: %w",
 				serviceName,
 				err,
+			)
+		}
+
+		// ECS 변경이 실제로 실행된 경우에만 실행 시각 기록 - CoolDown 체크용
+		if result.Executed {
+			executedAt := time.Now()
+
+			u.scalingPolicy.RecordExecution(
+				serviceName,
+				string(result.Action),
+				executedAt,
+			)
+
+			fmt.Printf(
+				"[scaling executed] serviceName=%s action=%s currentDesiredCount=%d recommendedDesiredCount=%d executedAt=%s\n",
+				serviceName,
+				result.Action,
+				result.CurrentDesiredCount,
+				result.RecommendedDesiredCount,
+				executedAt.Format(time.RFC3339),
 			)
 		}
 	}
@@ -298,6 +319,7 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 	result domain.SessionAutoScalingResult,
 ) (domain.SessionAutoScalingResult, error) {
 	switch result.Action {
+
 	case domain.ScalingActionScaleOut:
 		updatedState, err := u.ecsPort.UpdateServiceDesiredCount(
 			ctx,
@@ -307,6 +329,7 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 		)
 		if err != nil {
 			return domain.SessionAutoScalingResult{}, fmt.Errorf(
+				"failed to update ECS desired count: serviceName=%s currentDesiredCount=%d recommendedDesiredCount=%d: %w",
 				result.ServiceName,
 				result.CurrentDesiredCount,
 				result.RecommendedDesiredCount,
@@ -316,11 +339,29 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 
 		result.Executed = true
 		result.ECSState = updatedState
+		result.Reason = fmt.Sprintf(
+			"scale-out executed successfully: desiredCount=%d -> %d",
+			result.CurrentDesiredCount,
+			result.RecommendedDesiredCount,
+		)
 
 	case domain.ScalingActionScaleIn:
 		// Scale-in은 Task drain 절차가 필요하므로 여기서 실행하지 않는다.
-		result.Executed = false
+		updatedState, err := u.executeScaleIn(
+			ctx,
+			ecsServiceName,
+			result,
+		)
 
+		if err != nil {
+			return result, fmt.Errorf(
+				"failed to execute scale-in: serviceName=%s currentDesiredCount=%d recommendedDesiredCount=%d: %w",
+				result.ServiceName,
+				result.CurrentDesiredCount,
+				result.RecommendedDesiredCount,
+				err,
+			)
+		}
 		// (scale in) 가장 적은수의 sessionCount를 갖는 task에 scale in 통보
 		// desiredCount만 변경한다고해서 선정한 Task가 종료된다고 보장되지 않습니다.
 		// ECS Service는 desiredCount를 유지하는 역할을 하며, Scale-in 시 어떤 Task가 종료될지는 ECS 스케줄러가 결정합니다.
@@ -343,6 +384,14 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 		// h. 대상 Task가 STOPPED인지 확인
 		// i. 서비스가 안정 상태인지 확인
 		// j. 남은 Task의 protection 해제
+
+		result.Executed = true
+		result.ECSState = updatedState
+		result.Reason = fmt.Sprintf(
+			"scale-in executed successfully: desiredCount=%d -> %d",
+			result.CurrentDesiredCount,
+			result.RecommendedDesiredCount,
+		)
 
 	case domain.ScalingActionKeep:
 		result.Executed = false

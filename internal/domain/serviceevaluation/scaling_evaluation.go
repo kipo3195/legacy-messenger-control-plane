@@ -8,6 +8,7 @@ const (
 	ScalingActionScaleInCandidate ScalingAction = "SCALE_IN_CANDIDATE"
 	ScalingActionKeep             ScalingAction = "KEEP"
 	ScalingActionNotScalable      ScalingAction = "NOT_SCALABLE"
+	ScaleActionSkip               ScalingAction = "SCALE_ACTION_SKIP"
 )
 
 type ScalingEvaluation struct {

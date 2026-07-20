@@ -16,6 +16,7 @@ type UseCases struct {
 	ConnectionPressure       usecase.ConnectionPressureUsecase
 	ServiceEvaluation        usecase.ServiceEvaluationUsecase
 	AutoScale                usecase.SessionAutoScalingUsecase
+	ScaleInUsecase           usecase.ScaleInUsecase
 }
 
 func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.ServiceRegistry) *UseCases {
@@ -27,6 +28,9 @@ func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.Servic
 		cfg.ECS,
 		registry,
 	)
+
+	scalingPolicy := usecase.NewScalingPolicy()
+	scaleInCoordinator := usecase.NewScaleInCoordinator()
 
 	return &UseCases{
 		ServiceObservationStatus: usecase.NewServiceObservationUsecase(
@@ -88,6 +92,14 @@ func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.Servic
 			registry,
 			cfg.ECS,
 			cfg.AutoScale,
+			scalingPolicy,
+		),
+
+		ScaleInUsecase: usecase.NewScaleInUsecase(
+			clients.TaskSession,
+			clients.ECS,
+			scalingPolicy,
+			scaleInCoordinator,
 		),
 	}
 }
