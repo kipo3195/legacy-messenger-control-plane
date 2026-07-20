@@ -2,12 +2,18 @@ package usecase
 
 import (
 	"context"
+	"fmt"
+	"legacy-messenger-control-plane/configs"
+	"legacy-messenger-control-plane/internal/domain"
 	"legacy-messenger-control-plane/internal/ports"
+	"time"
 )
 
 type scaleInUsecase struct {
 	taskSessionPort ports.TaskSessionPort
 	ecsPort         ports.ECSPort
+	ecsCfg          *configs.ECSConfig
+	autoScaleCfg    *configs.AutoScaleConfig
 	scalingPolicy   *ScalingPolicy
 	coordinator     *ScaleInCoordinator
 }
@@ -19,28 +25,293 @@ type ScaleInUsecase interface {
 func NewScaleInUsecase(
 	taskSessionPort ports.TaskSessionPort,
 	ecsPort ports.ECSPort,
+	autoScaleCfg *configs.AutoScaleConfig,
+	ecsCfg *configs.ECSConfig,
 	scalingPolicy *ScalingPolicy,
 	coordinator *ScaleInCoordinator,
 ) ScaleInUsecase {
 	return &scaleInUsecase{
 		taskSessionPort: taskSessionPort,
 		ecsPort:         ecsPort,
+		autoScaleCfg:    autoScaleCfg,
+		ecsCfg:          ecsCfg,
 		scalingPolicy:   scalingPolicy,
 		coordinator:     coordinator,
 	}
 }
 
+// SessionAutoScalingScheduler에서 Scale in 정책을 승인 (Coordinator에 ScaleInJob 등록)
+// 하면 일정 주기마다 Process -> 활성 Job 조회 -> 현재 상태에 맞는 다음 단계 수행
 func (u *scaleInUsecase) Process(ctx context.Context) error {
 	jobs := u.coordinator.GetActiveJobs()
 
 	for _, job := range jobs {
 		if err := u.processJob(ctx, job); err != nil {
-			u.coordinator.MarkFailed(
+			markErr := u.coordinator.MarkFailed(
 				job.ServiceName,
+				err,
+			)
+			if markErr != nil {
+				fmt.Printf(
+					"[scale-in] failed to mark job as failed: serviceName=%s processError=%v markError=%v\n",
+					job.ServiceName,
+					err,
+					markErr,
+				)
+				continue
+			}
+
+			fmt.Printf(
+				"[scale-in] job failed: serviceName=%s status=%s error=%v\n",
+				job.ServiceName,
+				job.Status,
 				err,
 			)
 		}
 	}
+
+	return nil
+}
+
+func (u *scaleInUsecase) processJob(
+	ctx context.Context,
+	job domain.ScaleInJob,
+) error {
+
+	// 진행중인 작업에 따라 다르게 처리함.
+	switch job.Status {
+	case domain.ScaleInStatusRequested:
+		return u.startDrain(ctx, job)
+
+	case domain.ScaleInStatusDraining:
+		return u.checkDrain(ctx, job)
+
+	case domain.ScaleInStatusApplied:
+		return u.checkCompletion(ctx, job)
+
+	default:
+		return nil
+	}
+}
+
+// REQUESTED 상태
+// 메인 Auto Scaling Scheduler가 Scale-in 작업을 등록한 직후
+func (u *scaleInUsecase) startDrain(
+	ctx context.Context,
+	job domain.ScaleInJob,
+) error {
+	taskInfo, err := u.selectScaleInTarget( // 가장 적은 수의 session을 갖는 task를 선출
+		ctx,
+		job.ServiceName,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 생존 예정 Task protection 설정
+	// 대상 Task Drain 요청
+
+	return u.coordinator.MarkDraining(
+		job.ServiceName,
+		taskInfo.TaskID,
+	)
+}
+
+func (u *scaleInUsecase) selectScaleInTarget(
+	ctx context.Context,
+	serviceName string,
+) (domain.TaskInfo, error) {
+	reports, err := u.taskSessionPort.GetTaskSessionReport( // redis에 있는 report를 직접 조회 해서 가정 적은 session의 task를 찾음
+		ctx,
+		serviceName,
+	)
+	if err != nil {
+		return domain.TaskInfo{}, fmt.Errorf(
+			"failed to get task session reports: %w",
+			err,
+		)
+	}
+
+	expiredReports, _, err :=
+		u.taskSessionPort.GetInvalidReportTask(
+			ctx,
+			serviceName,
+			u.autoScaleCfg,
+		)
+	if err != nil {
+		return domain.TaskInfo{}, fmt.Errorf(
+			"failed to get invalid task reports: %w",
+			err,
+		)
+	}
+
+	var target domain.TaskInfo
+	found := false
+
+	for taskID, report := range reports {
+		// 만료되거나 중지 대상으로 분류된 Task 제외
+		if _, expired := expiredReports[taskID]; expired {
+			continue
+		}
+
+		if !found || report.SessionCount < target.SessionCount {
+			target = domain.TaskInfo{
+				TaskID:       taskID,
+				SessionCount: report.SessionCount,
+			}
+			found = true
+		}
+	}
+
+	if !found {
+		return domain.TaskInfo{}, fmt.Errorf(
+			"no eligible scale-in target found: serviceName=%s",
+			serviceName,
+		)
+	}
+
+	return target, nil
+}
+
+// DRAINING
+// Drain 요청을 보낸 상태야.
+// 매 Scheduler 실행마다 대상 Task의 세션 수를 확인 (0이 될때까지)
+func (u *scaleInUsecase) checkDrain(
+	ctx context.Context,
+	job domain.ScaleInJob,
+) error {
+	report, err := u.taskSessionPort.GetTaskSessionReportByTask( // drain 중에 현재 task에 연결된 session의 수 점검
+		ctx,
+		job.ServiceName,
+		job.TargetTaskID,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 아직 대기
+	if report.SessionCount > 0 {
+		return u.coordinator.ResetZeroSessionStreak(
+			job.ServiceName,
+		)
+	}
+
+	// zeroSessionStreak 증가 (판단 정책)
+	streak, err := u.coordinator.IncreaseZeroSessionStreak(
+		job.ServiceName,
+	)
+	if err != nil {
+		return err
+	}
+
+	if streak < 3 {
+		return nil
+	}
+
+	// 0이 연속 3회, desiredCount 감소, 상태 APPLIED
+	_, err = u.ecsPort.UpdateServiceDesiredCount(
+		ctx,
+		u.ecsCfg.ClusterName,
+		job.ECSServiceName,
+		job.TargetDesiredCount,
+	)
+	if err != nil {
+		return err
+	}
+
+	u.scalingPolicy.RecordExecution(
+		job.ServiceName,
+		string(domain.ScalingActionScaleIn),
+		time.Now(),
+	)
+
+	return u.coordinator.MarkApplied(job.ServiceName)
+}
+
+// APPLIED
+// 이미 ECS의 desiredCount 감소 요청까지 성공한 상태
+func (u *scaleInUsecase) checkCompletion(
+	ctx context.Context,
+	job domain.ScaleInJob,
+) error {
+
+	// 1. ECS 서비스 수렴 여부 확인
+	ecsState, err := u.ecsPort.GetServiceControlState(
+		ctx,
+		u.ecsCfg.ClusterName,
+		job.ECSServiceName,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get ECS service state: %w",
+			err,
+		)
+	}
+
+	// desiredCount == runningCount인가
+	// pendingCount == 0인가
+	// 정상적으로 scale in이 되었는가
+	if ecsState.PendingCount > 0 ||
+		ecsState.RunningCount != ecsState.DesiredCount {
+		return nil
+	}
+
+	// 대상 Task STOPPED 확인
+	// Task protection 해제
+
+	// Scale-in 작업을 종료 상태로 바꾸기 위해 호출
+	return u.coordinator.Complete(job.ServiceName)
+}
+
+func (c *ScaleInCoordinator) MarkFailed(
+	serviceName string,
+	cause error,
+) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	job, exists := c.jobs[serviceName]
+	if !exists {
+		return fmt.Errorf(
+			"scale-in job not found: serviceName=%s",
+			serviceName,
+		)
+	}
+
+	job.Status = domain.ScaleInStatusFailed
+	job.UpdatedAt = time.Now()
+
+	if cause != nil {
+		job.LastError = cause.Error()
+	}
+
+	return nil
+}
+
+func (c *ScaleInCoordinator) Complete(
+	serviceName string,
+) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	job, exists := c.jobs[serviceName]
+	if !exists {
+		return fmt.Errorf(
+			"scale-in job not found: serviceName=%s",
+			serviceName,
+		)
+	}
+
+	if job.Status != domain.ScaleInStatusApplied {
+		return fmt.Errorf(
+			"scale-in cannot be completed: serviceName=%s status=%s",
+			serviceName,
+			job.Status,
+		)
+	}
+
+	job.Status = domain.ScaleInStatusCompleted
+	job.UpdatedAt = time.Now()
 
 	return nil
 }

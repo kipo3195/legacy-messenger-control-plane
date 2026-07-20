@@ -12,12 +12,13 @@ import (
 )
 
 type sessionAutoScalingUsecase struct {
-	taskSessionPort ports.TaskSessionPort
-	ecsPort         ports.ECSPort
-	registry        *configs.ServiceRegistry
-	autoScale       *configs.AutoScaleConfig
-	ecsCfg          *configs.ECSConfig
-	scalingPolicy   *ScalingPolicy
+	taskSessionPort    ports.TaskSessionPort
+	ecsPort            ports.ECSPort
+	registry           *configs.ServiceRegistry
+	autoScale          *configs.AutoScaleConfig
+	ecsCfg             *configs.ECSConfig
+	scalingPolicy      *ScalingPolicy
+	scaleInCoordinator *ScaleInCoordinator
 }
 
 type SessionAutoScalingUsecase interface {
@@ -31,14 +32,16 @@ func NewSessionAutoScalingUsecase(
 	ecsCfg *configs.ECSConfig,
 	autoScale *configs.AutoScaleConfig,
 	scalingPolicy *ScalingPolicy,
+	scaleInCoordinator *ScaleInCoordinator,
 ) SessionAutoScalingUsecase {
 	return &sessionAutoScalingUsecase{
-		taskSessionPort: taskSessionPort,
-		ecsPort:         ecsPort,
-		registry:        registry,
-		ecsCfg:          ecsCfg,
-		autoScale:       autoScale,
-		scalingPolicy:   scalingPolicy,
+		taskSessionPort:    taskSessionPort,
+		ecsPort:            ecsPort,
+		registry:           registry,
+		ecsCfg:             ecsCfg,
+		autoScale:          autoScale,
+		scalingPolicy:      scalingPolicy,
+		scaleInCoordinator: scaleInCoordinator,
 	}
 }
 
@@ -347,21 +350,15 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 
 	case domain.ScalingActionScaleIn:
 		// Scale-in은 Task drain 절차가 필요하므로 여기서 실행하지 않는다.
-		updatedState, err := u.executeScaleIn(
-			ctx,
-			ecsServiceName,
-			result,
-		)
+		// 20260720 executeScaleIn 대신 별도의 scale in scheduler가 실행할때 상태를 참조 할 수 있는 scaleInCoordinator에 위임한다.
+		// updatedState, err := u.executeScaleIn(
+		// 	ctx,
+		// 	ecsServiceName,
+		// 	result,
+		// )
 
-		if err != nil {
-			return result, fmt.Errorf(
-				"failed to execute scale-in: serviceName=%s currentDesiredCount=%d recommendedDesiredCount=%d: %w",
-				result.ServiceName,
-				result.CurrentDesiredCount,
-				result.RecommendedDesiredCount,
-				err,
-			)
-		}
+		return u.requestScaleIn(ecsServiceName, result)
+
 		// (scale in) 가장 적은수의 sessionCount를 갖는 task에 scale in 통보
 		// desiredCount만 변경한다고해서 선정한 Task가 종료된다고 보장되지 않습니다.
 		// ECS Service는 desiredCount를 유지하는 역할을 하며, Scale-in 시 어떤 Task가 종료될지는 ECS 스케줄러가 결정합니다.
@@ -383,15 +380,14 @@ func (u *sessionAutoScalingUsecase) applyScalingDecision(
 		// g. desiredCount를 1 감소 (변경 실패시 어떻게 처리할 것인가?)
 		// h. 대상 Task가 STOPPED인지 확인
 		// i. 서비스가 안정 상태인지 확인
-		// j. 남은 Task의 protection 해제
 
-		result.Executed = true
-		result.ECSState = updatedState
-		result.Reason = fmt.Sprintf(
-			"scale-in executed successfully: desiredCount=%d -> %d",
-			result.CurrentDesiredCount,
-			result.RecommendedDesiredCount,
-		)
+		// result.Executed = true
+		// result.ECSState = updatedState
+		// result.Reason = fmt.Sprintf(
+		// 	"scale-in executed successfully: desiredCount=%d -> %d",
+		// 	result.CurrentDesiredCount,
+		// 	result.RecommendedDesiredCount,
+		// )
 
 	case domain.ScalingActionKeep:
 		result.Executed = false
@@ -502,4 +498,38 @@ type ScalingEvaluation struct {
 	ECSState       domain.ECSServiceControlState
 	ReportCoverage float64
 	EvaluatedAt    time.Time
+}
+
+func (u *sessionAutoScalingUsecase) requestScaleIn(
+	ecsServiceName string,
+	result domain.SessionAutoScalingResult,
+) (domain.SessionAutoScalingResult, error) {
+
+	targetDesiredCount := result.CurrentDesiredCount - 1
+
+	err := u.scaleInCoordinator.Request(
+		domain.ScaleInJob{
+			ServiceName:         result.ServiceName,
+			ECSServiceName:      ecsServiceName,
+			CurrentDesiredCount: result.CurrentDesiredCount,
+			TargetDesiredCount:  targetDesiredCount,
+		},
+	)
+	if err != nil {
+		return result, fmt.Errorf(
+			"failed to request scale-in: serviceName=%s: %w",
+			result.ServiceName,
+			err,
+		)
+	}
+
+	result.Executed = false
+	result.RecommendedDesiredCount = targetDesiredCount
+	result.Reason = fmt.Sprintf(
+		"scale-in job requested: desiredCount=%d -> %d",
+		result.CurrentDesiredCount,
+		targetDesiredCount,
+	)
+
+	return result, nil
 }

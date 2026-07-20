@@ -59,18 +59,23 @@ func (c *ScaleInCoordinator) Request(
 }
 
 // 진행중 작업 조회
-func (c *ScaleInCoordinator) GetActive(
-	serviceName string,
-) (domain.ScaleInJob, bool) {
+func (c *ScaleInCoordinator) GetActiveJobs() []domain.ScaleInJob {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	job, exists := c.jobs[serviceName]
-	if !exists || !isActiveScaleInStatus(job.Status) {
-		return domain.ScaleInJob{}, false
+	jobs := make([]domain.ScaleInJob, 0)
+
+	for _, job := range c.jobs {
+
+		if !isActiveScaleInStatus(job.Status) {
+			continue
+		}
+
+		// requested, draining, applied만 담음
+		jobs = append(jobs, *job)
 	}
 
-	return *job, true
+	return jobs
 }
 
 // 상태 변경
@@ -104,7 +109,7 @@ func (c *ScaleInCoordinator) MarkDraining(
 	return nil
 }
 
-// 세션 0 횟수 증가
+// drain 요청에 대한 완료로 세션의 수가 0이 됬을때 1을 증가시킴
 func (c *ScaleInCoordinator) IncreaseZeroSessionStreak(
 	serviceName string,
 ) (int, error) {

@@ -13,4 +13,5 @@ type TaskSessionPort interface {
 	GetInvalidReportTask(ctx context.Context, serviceName string, cfg *configs.AutoScaleConfig) (map[string]string, []string, error)
 	ShouldStopTask(ctx context.Context, serviceName string, taskID string, now time.Time) (bool, error)
 	DeleteTaskSessionState(ctx context.Context, serviceName string, taskID string) error
+	GetTaskSessionReportByTask(ctx context.Context, serviceName string, taskID string) (domain.SessionReport, error)
 }

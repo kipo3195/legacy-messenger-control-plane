@@ -3,12 +3,20 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"legacy-messenger-control-plane/internal/application/usecase"
 	"time"
 )
 
 type ScaleInScheduler struct {
-	usecase  ScaleInUsecase
+	usecase  usecase.ScaleInUsecase
 	interval time.Duration
+}
+
+func NewScaleInScheduler(usecase usecase.ScaleInUsecase, interval time.Duration) *ScaleInScheduler {
+	return &ScaleInScheduler{
+		usecase:  usecase,
+		interval: interval,
+	}
 }
 
 func (s *ScaleInScheduler) Start(ctx context.Context) {

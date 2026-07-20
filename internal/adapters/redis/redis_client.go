@@ -343,3 +343,60 @@ func (c *redisClient) DeleteTaskSessionState(
 
 	return nil
 }
+
+func (c *redisClient) GetTaskSessionReportByTask(ctx context.Context, serviceName string, taskID string) (domain.SessionReport, error) {
+
+	reportKey := fmt.Sprintf(
+		"control-plane:session:{%s}:reports",
+		serviceName,
+	)
+
+	var getAllCmd *goredis.MapStringStringCmd
+
+	_, err := c.client.TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
+		getAllCmd = pipe.HGetAll(ctx, reportKey)
+		return nil
+	})
+	if err != nil {
+		return domain.SessionReport{}, fmt.Errorf(
+			"failed to get task session reports: %w",
+			err,
+		)
+	}
+
+	result, err := getAllCmd.Result()
+	if err != nil {
+		return domain.SessionReport{}, fmt.Errorf(
+			"failed to read task session report result: %w",
+			err,
+		)
+	}
+
+	// log.Printf(
+	// 	"[redis] task session reports: serviceName=%s key=%s\n",
+	// 	serviceName,
+	// 	reportKey,
+	// )
+	// report 출력
+	// for _, v := range result {
+	// 	log.Printf("[redis] report : %s\n", v)
+	// }
+
+	for k, value := range result {
+		var report domain.SessionReport
+
+		if err := json.Unmarshal([]byte(value), &report); err != nil {
+			return domain.SessionReport{}, fmt.Errorf(
+				"failed to unmarshal session report: taskID=%s: %w",
+				taskID,
+				err,
+			)
+		}
+		if k == taskID {
+			return domain.SessionReport{
+				SessionCount: report.SessionCount,
+			}, nil
+		}
+	}
+	return domain.SessionReport{}, nil
+}

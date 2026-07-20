@@ -93,11 +93,15 @@ func NewUseCases(clients *Clients, cfg *configs.Config, registry *configs.Servic
 			cfg.ECS,
 			cfg.AutoScale,
 			scalingPolicy,
+			scaleInCoordinator,
 		),
 
 		ScaleInUsecase: usecase.NewScaleInUsecase(
 			clients.TaskSession,
 			clients.ECS,
+			// drain port
+			cfg.AutoScale,
+			cfg.ECS,
 			scalingPolicy,
 			scaleInCoordinator,
 		),
