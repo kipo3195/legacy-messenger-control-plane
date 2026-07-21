@@ -24,4 +24,6 @@ type TaskStatus struct {
 
 	Containers []ContainerStatus `json:"containers"`
 	Network    TaskNetworkInfo   `json:"network"`
+
+	PrivateIP string `json:"privateIp"`
 }

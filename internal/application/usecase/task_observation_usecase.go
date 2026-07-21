@@ -38,7 +38,7 @@ func (s *taskObservationUsecase) GetTaskStatus(ctx context.Context, serviceName 
 		return nil, fmt.Errorf("ecsServiceName is empty for service: %s", serviceName)
 	}
 
-	taskStatus, err := s.ecsPort.DescribeTask(ctx, s.ecsCfg.ClusterName, ecsServiceName, desiredStatus)
+	taskStatus, err := s.ecsPort.DescribeTasks(ctx, s.ecsCfg.ClusterName, ecsServiceName, desiredStatus)
 	if err != nil {
 		return nil, err
 	}

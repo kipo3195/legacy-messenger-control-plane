@@ -2,6 +2,7 @@ package domain
 
 import (
 	cp "legacy-messenger-control-plane/internal/domain/connectionpressure"
+	"legacy-messenger-control-plane/internal/domain/ecs"
 	sca "legacy-messenger-control-plane/internal/domain/scale"
 	si "legacy-messenger-control-plane/internal/domain/scalein"
 	svc "legacy-messenger-control-plane/internal/domain/service"
@@ -100,3 +101,5 @@ const (
 	ScaleInStatusCompleted = si.ScaleInStatusCompleted
 	ScaleInStatusFailed    = si.ScaleInStatusFailed
 )
+
+type ECSTask = ecs.ECSTask

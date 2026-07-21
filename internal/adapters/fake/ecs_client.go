@@ -67,7 +67,7 @@ func (c *ECSClient) GetServiceControlState(
 func (c *ECSClient) DescribeService(ctx context.Context, clusterName string, ecsServiceName string) (*domain.ServiceStatus, error) {
 	return nil, nil
 }
-func (c *ECSClient) DescribeTask(ctx context.Context, clusterName string, ecsServiceName string, desiredStatus string) ([]domain.TaskStatus, error) {
+func (c *ECSClient) DescribeTasks(ctx context.Context, clusterName string, ecsServiceName string, desiredStatus string) ([]domain.TaskStatus, error) {
 	return nil, nil
 }
 
@@ -123,4 +123,8 @@ func (c *ECSClient) GetRunningTaskIDs(ctx context.Context, clusterName string, e
 
 func (c *ECSClient) UpdateTaskProtection(ctx context.Context, clusterName string, protectedTaskIDs []string, flag bool) error {
 	return nil
+}
+
+func (c *ECSClient) DescribeTask(ctx context.Context, clusterName string, taskID string) (domain.ECSTask, error) {
+	return domain.ECSTask{}, nil
 }

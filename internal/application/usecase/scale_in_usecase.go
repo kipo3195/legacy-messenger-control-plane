@@ -12,6 +12,7 @@ import (
 type scaleInUsecase struct {
 	taskSessionPort ports.TaskSessionPort
 	ecsPort         ports.ECSPort
+	taskDrainPort   ports.TaskDrainPort
 	ecsCfg          *configs.ECSConfig
 	autoScaleCfg    *configs.AutoScaleConfig
 	scalingPolicy   *ScalingPolicy
@@ -25,6 +26,7 @@ type ScaleInUsecase interface {
 func NewScaleInUsecase(
 	taskSessionPort ports.TaskSessionPort,
 	ecsPort ports.ECSPort,
+	taskDrainPort ports.TaskDrainPort,
 	autoScaleCfg *configs.AutoScaleConfig,
 	ecsCfg *configs.ECSConfig,
 	scalingPolicy *ScalingPolicy,
@@ -33,6 +35,7 @@ func NewScaleInUsecase(
 	return &scaleInUsecase{
 		taskSessionPort: taskSessionPort,
 		ecsPort:         ecsPort,
+		taskDrainPort:   taskDrainPort,
 		autoScaleCfg:    autoScaleCfg,
 		ecsCfg:          ecsCfg,
 		scalingPolicy:   scalingPolicy,
@@ -150,7 +153,7 @@ func (u *scaleInUsecase) startDrain(
 	}
 
 	// 5. 대상 Task에 실제 Drain 요청 (이건 redis에 호출하게 아니지 않나?)
-	if err := u.taskSessionPort.RequestTaskDrain(
+	if err := u.taskDrainPort.RequestDrain(
 		ctx,
 		job.ServiceName,
 		targetTask.TaskID,

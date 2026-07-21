@@ -5,6 +5,7 @@ import (
 	"legacy-messenger-control-plane/configs"
 	"legacy-messenger-control-plane/internal/adapters/aws"
 	"legacy-messenger-control-plane/internal/adapters/fake"
+	"legacy-messenger-control-plane/internal/adapters/http/client"
 	"legacy-messenger-control-plane/internal/adapters/redis"
 	"legacy-messenger-control-plane/internal/adapters/ssh"
 	"legacy-messenger-control-plane/internal/domain"
@@ -16,6 +17,7 @@ type Clients struct {
 	CloudWatch  ports.CloudWatchPort
 	ELB         ports.ELBPort
 	TaskSession ports.TaskSessionPort
+	TaskDrain   ports.TaskDrainPort
 
 	closeRedis func() error
 }
@@ -59,12 +61,16 @@ func NewClients(ctx context.Context, cfg *configs.Config) (*Clients, error) {
 		return nil, err
 	}
 
+	taskEndPointResolver := aws.NewECSTaskEndpointResolver(ecsClient, cfg.ECS, 33001)
+	taskDrain := client.NewTaskDrainClient(taskEndPointResolver)
+
 	return &Clients{
 		ECS:         ecsClient,
 		CloudWatch:  cloudWatchClient,
 		ELB:         elbClient,
 		TaskSession: taskSessionClient,
 		closeRedis:  taskSessionClient.Close,
+		TaskDrain:   taskDrain,
 	}, nil
 }
 

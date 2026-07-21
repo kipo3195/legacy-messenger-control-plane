@@ -105,7 +105,7 @@ func ptrTime(v *time.Time) time.Time {
 
 // adpater에서 AWS라이브러리 참조 및 결과를 ->  []domain.TaskStatus 하지 않고 AWS라이브러리 호출 결과를 return하여 usecase에서 처리하게 되면
 // usecase에서 외부 의존성 (AWS)를 알게 된다.
-func (c *ECSClient) DescribeTask(ctx context.Context, clusterName string, ecsServiceName string, desiredStatus string) ([]domain.TaskStatus, error) {
+func (c *ECSClient) DescribeTasks(ctx context.Context, clusterName string, ecsServiceName string, desiredStatus string) ([]domain.TaskStatus, error) {
 
 	if clusterName == "" {
 		return nil, fmt.Errorf("clusterName is required")
@@ -473,4 +473,77 @@ func (c *ECSClient) GetRunningTaskIDs(ctx context.Context, clusterName string, e
 
 func (c *ECSClient) UpdateTaskProtection(ctx context.Context, clusterName string, protectedTaskIDs []string, flag bool) error {
 	return nil
+}
+
+func (c *ECSClient) DescribeTask(
+	ctx context.Context,
+	clusterName string,
+	taskID string,
+) (domain.ECSTask, error) {
+
+	output, err := c.client.DescribeTasks(
+		ctx,
+		&ecs.DescribeTasksInput{
+			Cluster: aws.String(clusterName),
+			Tasks: []string{
+				taskID,
+			},
+		},
+	)
+	if err != nil {
+		return domain.ECSTask{}, fmt.Errorf(
+			"failed to describe ECS task: taskID=%s: %w",
+			taskID,
+			err,
+		)
+	}
+
+	if len(output.Failures) > 0 {
+		return domain.ECSTask{}, fmt.Errorf(
+			"failed to describe ECS task: taskID=%s reason=%s",
+			taskID,
+			aws.ToString(output.Failures[0].Reason),
+		)
+	}
+
+	if len(output.Tasks) == 0 {
+		return domain.ECSTask{}, fmt.Errorf(
+			"ECS task not found: taskID=%s",
+			taskID,
+		)
+	}
+
+	task := output.Tasks[0]
+
+	result := domain.ECSTask{
+		TaskARN:       aws.ToString(task.TaskArn),
+		LastStatus:    aws.ToString(task.LastStatus),
+		DesiredStatus: aws.ToString(task.DesiredStatus),
+	}
+
+	result.TaskID = extractTaskID(result.TaskARN)
+	result.PrivateIP = extractTaskPrivateIP(task)
+
+	return result, nil
+}
+
+func extractTaskID(taskARN string) string {
+	index := strings.LastIndex(taskARN, "/")
+	if index < 0 || index == len(taskARN)-1 {
+		return taskARN
+	}
+
+	return taskARN[index+1:]
+}
+
+func extractTaskPrivateIP(task types.Task) string {
+	for _, attachment := range task.Attachments {
+		for _, detail := range attachment.Details {
+			if aws.ToString(detail.Name) == "privateIPv4Address" {
+				return aws.ToString(detail.Value)
+			}
+		}
+	}
+
+	return ""
 }
