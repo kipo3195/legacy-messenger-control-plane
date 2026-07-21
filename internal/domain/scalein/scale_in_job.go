@@ -8,7 +8,8 @@ type ScaleInJob struct {
 
 	Status ScaleInStatus
 
-	TargetTaskID string
+	TargetTaskID     string
+	ProtectedTaskIDs []string
 
 	CurrentDesiredCount int
 	TargetDesiredCount  int

@@ -466,3 +466,11 @@ func mapServiceToRedeployResult(clusterName string, svc types.Service) domain.Se
 		Deployments:    deployments,
 	}
 }
+
+func (c *ECSClient) GetRunningTaskIDs(ctx context.Context, clusterName string, ecsServiceName string) ([]string, error) {
+	return nil, nil
+}
+
+func (c *ECSClient) UpdateTaskProtection(ctx context.Context, clusterName string, protectedTaskIDs []string, flag bool) error {
+	return nil
+}

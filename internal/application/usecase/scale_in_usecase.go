@@ -100,20 +100,84 @@ func (u *scaleInUsecase) startDrain(
 	ctx context.Context,
 	job domain.ScaleInJob,
 ) error {
-	taskInfo, err := u.selectScaleInTarget( // 가장 적은 수의 session을 갖는 task를 선출
+	targetTask, err := u.selectScaleInTarget( // 가장 적은 수의 session을 갖는 task를 선출
 		ctx,
 		job.ServiceName,
 	)
 	if err != nil {
 		return err
 	}
+	// running task 조회 -> scale in 대상 제외 처리 (proection)
+	runningTaskIDs, err := u.ecsPort.GetRunningTaskIDs(
+		ctx,
+		u.ecsCfg.ClusterName,
+		job.ECSServiceName,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get running tasks: %w",
+			err,
+		)
+	}
+
+	// 종료 대상 외 Task를 생존 예정 Task로 선정
+	protectedTaskIDs := make([]string, 0)
+
+	for _, taskID := range runningTaskIDs {
+		if taskID == targetTask.TaskID {
+			continue
+		}
+
+		protectedTaskIDs = append(
+			protectedTaskIDs,
+			taskID,
+		)
+	}
 
 	// 생존 예정 Task protection 설정
-	// 대상 Task Drain 요청
+	if len(protectedTaskIDs) > 0 {
+		if err := u.ecsPort.UpdateTaskProtection(
+			ctx,
+			u.ecsCfg.ClusterName,
+			protectedTaskIDs,
+			true,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to protect survivor tasks: %w",
+				err,
+			)
+		}
+	}
 
+	// 5. 대상 Task에 실제 Drain 요청 (이건 redis에 호출하게 아니지 않나?)
+	if err := u.taskSessionPort.RequestTaskDrain(
+		ctx,
+		job.ServiceName,
+		targetTask.TaskID,
+	); err != nil {
+
+		// Drain 요청 실패 시 protection 원복
+		if len(protectedTaskIDs) > 0 {
+			_ = u.ecsPort.UpdateTaskProtection(
+				context.Background(),
+				u.ecsCfg.ClusterName,
+				protectedTaskIDs,
+				false,
+			)
+		}
+
+		return fmt.Errorf(
+			"failed to request task drain: taskID=%s: %w",
+			targetTask.TaskID,
+			err,
+		)
+	}
+
+	// 6. 상태 및 작업 정보 저장
 	return u.coordinator.MarkDraining(
 		job.ServiceName,
-		taskInfo.TaskID,
+		targetTask.TaskID,
+		protectedTaskIDs,
 	)
 }
 
@@ -180,7 +244,7 @@ func (u *scaleInUsecase) checkDrain(
 	ctx context.Context,
 	job domain.ScaleInJob,
 ) error {
-	report, err := u.taskSessionPort.GetTaskSessionReportByTask( // drain 중에 현재 task에 연결된 session의 수 점검
+	report, err := u.taskSessionPort.GetTaskSessionReportByTask( // drain 중에 현재 task에 연결된 session의 수 점검, 단 TargetTaskID는 Requested시점의 최소 session task임
 		ctx,
 		job.ServiceName,
 		job.TargetTaskID,

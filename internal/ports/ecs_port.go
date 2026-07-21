@@ -13,4 +13,6 @@ type ECSPort interface {
 	GetServiceControlState(ctx context.Context, clusterName string, ecsServiceName string) (domain.ECSServiceControlState, error)
 	UpdateServiceDesiredCount(ctx context.Context, clusterName string, ecsServiceName string, desiredCount int) (domain.ECSServiceControlState, error)
 	ForceNewDeployment(ctx context.Context, clusterName string, ecsServiceName string) (domain.ServiceRedeployResult, error)
+	GetRunningTaskIDs(ctx context.Context, clusterName string, ecsServiceName string) ([]string, error)
+	UpdateTaskProtection(ctx context.Context, clusterName string, protectedTaskIDs []string, flag bool) error
 }

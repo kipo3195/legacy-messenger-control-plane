@@ -82,6 +82,7 @@ func (c *ScaleInCoordinator) GetActiveJobs() []domain.ScaleInJob {
 func (c *ScaleInCoordinator) MarkDraining(
 	serviceName string,
 	targetTaskID string,
+	protectedTaskIDs []string,
 ) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -103,6 +104,10 @@ func (c *ScaleInCoordinator) MarkDraining(
 	}
 
 	job.TargetTaskID = targetTaskID
+	job.ProtectedTaskIDs = append(
+		[]string(nil),
+		protectedTaskIDs...,
+	)
 	job.Status = domain.ScaleInStatusDraining
 	job.UpdatedAt = time.Now()
 

@@ -116,3 +116,11 @@ func (c *ECSClient) UpdateServiceDesiredCount(
 func (c *ECSClient) ForceNewDeployment(ctx context.Context, clusterName string, ecsServiceName string) (domain.ServiceRedeployResult, error) {
 	return domain.ServiceRedeployResult{}, nil
 }
+
+func (c *ECSClient) GetRunningTaskIDs(ctx context.Context, clusterName string, ecsServiceName string) ([]string, error) {
+	return nil, nil
+}
+
+func (c *ECSClient) UpdateTaskProtection(ctx context.Context, clusterName string, protectedTaskIDs []string, flag bool) error {
+	return nil
+}
