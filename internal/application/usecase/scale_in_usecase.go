@@ -17,6 +17,7 @@ type scaleInUsecase struct {
 	autoScaleCfg    *configs.AutoScaleConfig
 	scalingPolicy   *ScalingPolicy
 	coordinator     *ScaleInCoordinator
+	targetTaskID    string
 }
 
 type ScaleInUsecase interface {
@@ -32,6 +33,7 @@ func NewScaleInUsecase(
 	scalingPolicy *ScalingPolicy,
 	coordinator *ScaleInCoordinator,
 ) ScaleInUsecase {
+
 	return &scaleInUsecase{
 		taskSessionPort: taskSessionPort,
 		ecsPort:         ecsPort,
@@ -40,6 +42,7 @@ func NewScaleInUsecase(
 		ecsCfg:          ecsCfg,
 		scalingPolicy:   scalingPolicy,
 		coordinator:     coordinator,
+		targetTaskID:    "",
 	}
 }
 
@@ -176,7 +179,10 @@ func (u *scaleInUsecase) startDrain(
 		)
 	}
 
-	// 6. 상태 및 작업 정보 저장
+	// 6.메모리에서 현재 drain 대상 task 정보 관리 - 완료 후 protection 해제용
+	u.targetTaskID = targetTask.TaskID
+
+	// 7. 상태 및 작업 정보 저장
 	return u.coordinator.MarkDraining(
 		job.ServiceName,
 		targetTask.TaskID,
@@ -302,7 +308,7 @@ func (u *scaleInUsecase) checkCompletion(
 	job domain.ScaleInJob,
 ) error {
 
-	// 1. ECS 서비스 수렴 여부 확인
+	// ECS 서비스 수렴 여부 확인
 	ecsState, err := u.ecsPort.GetServiceControlState(
 		ctx,
 		u.ecsCfg.ClusterName,
@@ -323,8 +329,68 @@ func (u *scaleInUsecase) checkCompletion(
 		return nil
 	}
 
+	// 현재 drain 진행중인 task 정보 조회 - requested 시점에 저장함
+	targetTaskID := u.targetTaskID
+
 	// 대상 Task STOPPED 확인
+	ecsTask, err := u.ecsPort.DescribeTask(ctx, u.ecsCfg.ClusterName, targetTaskID)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get ECS DescribeTask : %w",
+			err,
+		)
+	}
+
+	if ecsTask.LastStatus != "STOPPED" {
+		return fmt.Errorf(
+			"%s status is invalid ... status : %w",
+			targetTaskID,
+			err,
+		)
+	}
+
+	// 종료 대상 외 Task를 생존 예정 Task로 선정
+	protectedTaskIDs := make([]string, 0)
+
+	// running task 조회 -> scale in 대상 제외 처리 (proection)
+	runningTaskIDs, err := u.ecsPort.GetRunningTaskIDs(
+		ctx,
+		u.ecsCfg.ClusterName,
+		job.ECSServiceName,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get running tasks: %w",
+			err,
+		)
+	}
+
+	for _, taskID := range runningTaskIDs {
+		if taskID == targetTaskID {
+			continue
+		}
+
+		protectedTaskIDs = append(
+			protectedTaskIDs,
+			taskID,
+		)
+	}
+
 	// Task protection 해제
+	if err := u.ecsPort.UpdateTaskProtection(
+		ctx,
+		u.ecsCfg.ClusterName,
+		protectedTaskIDs,
+		false,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to protect survivor tasks: %w",
+			err,
+		)
+	}
+
+	// scail in 완료 후 taskID 초기화
+	u.targetTaskID = ""
 
 	// Scale-in 작업을 종료 상태로 바꾸기 위해 호출
 	return u.coordinator.Complete(job.ServiceName)
