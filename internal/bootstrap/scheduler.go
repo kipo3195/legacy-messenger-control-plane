@@ -18,7 +18,7 @@ func NewScheduler(ctx context.Context, usecases *UseCases, cfg *configs.Config) 
 	autoScale := scheduler.NewSessionScalingScheduler(usecases.AutoScale, "ws", time.Duration(interval)*time.Second)
 	go autoScale.Start(ctx)
 
-	scaleInScheduler := scheduler.NewScaleInScheduler(usecases.ScaleInUsecase, time.Duration(interval)*time.Second)
-	scaleInScheduler.Start(ctx)
+	scaleIn := scheduler.NewScaleInScheduler(usecases.ScaleInUsecase, time.Duration(interval)*time.Second)
+	go scaleIn.Start(ctx)
 	return nil
 }
